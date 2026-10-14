@@ -301,7 +301,7 @@ const POSES = {
   punch:   { lean: -0.14, frontArm: 1.62, frontBend: 0.08, backArm: 0.45, backBend: 0.7,  frontFoot: [34, 0],  backFoot: [-14, 0] },
   impact:  { lean: -0.2,  frontArm: 1.7,  frontBend: -0.05, backArm: 0.15, backBend: 1.1, frontFoot: [42, 0],  backFoot: [-26, 0] },
   antiair: { lean: 0.16,  frontArm: 2.85, frontBend: 0.2,  backArm: 0.7,  backBend: 0.85, frontFoot: [16, 0],  backFoot: [-14, 0] },
-  jump:    { lean: -0.18, frontArm: 2.05, frontBend: 0.15, backArm: 1.1,  backBend: 0.55, frontFoot: [36, -50], backFoot: [-8, -34] },
+  jump:    { lean: 0.42, frontArm: 2.05, frontBend: 0.15, backArm: 1.1,  backBend: 0.55, frontFoot: [36, -50], backFoot: [-8, -34] },
   rush:    { lean: -0.32, frontArm: 1.15, frontBend: 0.45, backArm: -0.25, backBend: 0.6, frontFoot: [48, 0], backFoot: [-4, 0] },
   hit:     { lean: 0.2,   frontArm: 2.35, frontBend: 0.25, backArm: 2.15, backBend: 0.15, frontFoot: [10, 0], backFoot: [-20, 0] },
 };
@@ -656,6 +656,8 @@ function computeView(now, L) {
     if (kind === "jump") {
       const t = Math.min(elapsed / move.hit, 1);
       cpuAir = 4 * 128 * L.s * t * (1 - t);
+      const reach = Math.min(210 * L.s, (L.cpuBase - L.playerX) * 0.72);
+      cpuX = L.cpuBase - reach * t;
       cpuPose = "jump";
       if (result?.ok) {
         cpuPose = "hit";
@@ -816,18 +818,22 @@ function drawRushGlow(x, y, s, elapsed) {
 
 function drawJumpCue(x, y, s, elapsed) {
   const alpha = Math.max(0.45, 1 - elapsed / 16);
+  ctx.save();
+  ctx.translate(x - 72 * s, y - 214 * s);
+  ctx.rotate(-0.85);
   ctx.strokeStyle = `rgba(255, 214, 90, ${alpha})`;
   ctx.lineWidth = 5;
   ctx.lineCap = "round";
   ctx.lineJoin = "round";
   for (let i = 0; i < 2; i += 1) {
-    const yy = y - (196 + i * 18) * s;
+    const yy = -i * 20 * s;
     ctx.beginPath();
-    ctx.moveTo(x - 16 * s, yy + 12 * s);
-    ctx.lineTo(x, yy);
-    ctx.lineTo(x + 16 * s, yy + 12 * s);
+    ctx.moveTo(-16 * s, yy + 12 * s);
+    ctx.lineTo(0, yy);
+    ctx.lineTo(16 * s, yy + 12 * s);
     ctx.stroke();
   }
+  ctx.restore();
 }
 
 function drawPerson(x, y, s, face, pose, pal, alpha) {

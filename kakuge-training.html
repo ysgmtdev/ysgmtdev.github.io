@@ -1,0 +1,1108 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#141822">
+<title>反応練習</title>
+<style>
+  :root { color-scheme: dark; }
+  html, body {
+    margin: 0;
+    height: 100%;
+    background: #141822;
+    color: #e7ebf5;
+    overflow: hidden;
+    touch-action: none;
+    font-family: "Noto Sans CJK JP", "Hiragino Sans", "Yu Gothic UI", "Yu Gothic", "Meiryo", sans-serif;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+  }
+  canvas {
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    touch-action: none;
+  }
+  #intro, #summary {
+    position: fixed;
+    inset: 0;
+    z-index: 3;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 18px 16px 120px;
+    overflow: auto;
+    background: rgba(8, 10, 16, 0.45);
+    box-sizing: border-box;
+  }
+  #summary { z-index: 6; background: rgba(8, 10, 16, 0.88); }
+  #intro[hidden], #summary[hidden] { display: none; }
+  table.scores {
+    width: 100%;
+    margin: 16px 0 8px;
+    border-collapse: collapse;
+    font-size: 15px;
+  }
+  table.scores th, table.scores td {
+    padding: 8px 6px;
+    text-align: right;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  }
+  table.scores th:first-child, table.scores td:first-child { text-align: left; }
+  table.scores th {
+    color: #b7c0d4;
+    font-size: 13px;
+    font-weight: 700;
+  }
+  table.scores tr.total td { font-weight: 800; }
+  .summary-note {
+    margin: 8px 0 0;
+    min-height: 1.2em;
+    color: #b7c0d4;
+    font-size: 13px;
+  }
+  .summary-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 14px;
+  }
+  #back-title {
+    width: 100%;
+    height: 48px;
+    border: 0;
+    border-radius: 14px;
+    background: #3c445c;
+    color: white;
+    font: inherit;
+    font-size: 16px;
+    font-weight: 800;
+  }
+  .card {
+    width: min(440px, 100%);
+    background: #232838;
+    border-radius: 20px;
+    padding: 22px 20px 18px;
+    box-shadow: 0 18px 50px rgba(0, 0, 0, 0.35);
+  }
+  h1 {
+    margin: 0;
+    font-size: 28px;
+    letter-spacing: 0.04em;
+  }
+  .lead {
+    margin: 6px 0 0;
+    color: #b7c0d4;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+  .rules {
+    margin: 14px 0 10px;
+    padding-left: 1.15em;
+  }
+  .rules li {
+    margin: 6px 0;
+    font-size: 14px;
+    line-height: 1.45;
+  }
+  .rush {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 4px 0 14px;
+    font-size: 14px;
+  }
+  .rush span { color: #b7c0d4; }
+  .rush strong {
+    min-width: 7.5em;
+    text-align: center;
+    font-size: 15px;
+  }
+  .step {
+    width: 36px;
+    height: 36px;
+    border: 0;
+    border-radius: 10px;
+    background: #3c445c;
+    color: white;
+    font-size: 20px;
+    line-height: 1;
+  }
+  #start, #resume {
+    width: 100%;
+    height: 52px;
+    border: 0;
+    border-radius: 14px;
+    background: #f3f5f8;
+    color: #1a1d27;
+    font: inherit;
+    font-size: 18px;
+    font-weight: 800;
+  }
+  .keys {
+    margin: 10px 0 0;
+    text-align: center;
+    color: #8b95ab;
+    font-size: 12px;
+  }
+  #pad {
+    position: fixed;
+    z-index: 4;
+    right: max(14px, env(safe-area-inset-right));
+    bottom: max(14px, env(safe-area-inset-bottom));
+    display: flex;
+    gap: 10px;
+  }
+  #pad button {
+    width: 96px;
+    height: 96px;
+    padding: 0;
+    border: 0;
+    border-radius: 22px;
+    color: white;
+    font: inherit;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    box-shadow: 0 6px 0 rgba(0, 0, 0, 0.35);
+    touch-action: manipulation;
+  }
+  #pad button .nm { font-size: 16px; font-weight: 800; }
+  #pad button .sub { font-size: 11px; opacity: 0.85; }
+  #pad button kbd {
+    font: inherit;
+    font-size: 10px;
+    opacity: 0.7;
+  }
+  #pad button[data-move="impact"] { background: #d83a32; }
+  #pad button[data-move="antiair"] { background: #e39b12; }
+  #pad button[data-move="light"] { background: #3d74e0; }
+  #pad button:active {
+    transform: translateY(4px);
+    box-shadow: 0 2px 0 rgba(0, 0, 0, 0.35);
+  }
+  #pad button.hint {
+    outline: 3px solid #fff;
+    outline-offset: 3px;
+  }
+  #abort {
+    position: fixed;
+    z-index: 5;
+    top: max(16px, env(safe-area-inset-top));
+    right: max(14px, env(safe-area-inset-right));
+    height: 40px;
+    padding: 0 14px;
+    border: 0;
+    border-radius: 12px;
+    background: rgba(28, 33, 46, 0.92);
+    color: #e7ebf5;
+    font: inherit;
+    font-size: 14px;
+    font-weight: 800;
+    box-shadow: 0 3px 0 rgba(0, 0, 0, 0.35);
+    touch-action: manipulation;
+  }
+  #abort[hidden] { display: none; }
+  #abort:active {
+    transform: translateY(2px);
+    box-shadow: 0 1px 0 rgba(0, 0, 0, 0.35);
+  }
+  @media (max-width: 420px) {
+    #pad button { width: 84px; height: 84px; border-radius: 18px; }
+    #pad button .nm { font-size: 15px; }
+  }
+  @media (pointer: coarse) {
+    #pad button kbd, .keys { display: none; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    #pad button.hint { outline-offset: 2px; }
+  }
+  @media (max-height: 430px) {
+    #intro, #summary { padding-bottom: 16px; align-items: flex-start; }
+    .card { padding: 14px 14px 12px; }
+    h1 { font-size: 22px; }
+    .rules li { margin: 3px 0; }
+  }
+</style>
+</head>
+<body>
+  <div id="intro">
+    <div class="card">
+      <h1>反応練習</h1>
+      <p class="lead">相手の攻撃を見て、右下のボタンで返す。60Fが1秒です。</p>
+      <ul class="rules" id="rules"></ul>
+      <div class="rush">
+        <span>ラッシュのヒット</span>
+        <button type="button" class="step" id="rush-dec" aria-label="ラッシュを短くする">−</button>
+        <strong id="rush-val">30F</strong>
+        <button type="button" class="step" id="rush-inc" aria-label="ラッシュを長くする">＋</button>
+      </div>
+      <button type="button" id="start">練習を開始</button>
+      <p class="keys">キーボードは 1 弱 / 2 対空 / 3 インパクト</p>
+    </div>
+  </div>
+  <div id="summary" hidden>
+    <div class="card">
+      <h1>成績</h1>
+      <table class="scores">
+        <thead>
+          <tr><th>技</th><th>成功</th><th>試行</th><th>成功率</th></tr>
+        </thead>
+        <tbody id="summary-body"></tbody>
+      </table>
+      <p class="summary-note" id="summary-note"></p>
+      <div class="summary-actions">
+        <button type="button" id="resume">再開</button>
+        <button type="button" id="back-title">最初の画面に戻る</button>
+      </div>
+    </div>
+  </div>
+  <button type="button" id="abort" hidden>中断</button>
+  <div id="pad">
+    <button type="button" data-move="light" aria-label="弱">
+      <span class="nm">弱</span>
+      <span class="sub"></span>
+      <kbd>1</kbd>
+    </button>
+    <button type="button" data-move="antiair" aria-label="対空">
+      <span class="nm">対空</span>
+      <span class="sub"></span>
+      <kbd>2</kbd>
+    </button>
+    <button type="button" data-move="impact" aria-label="インパクト">
+      <span class="nm">インパクト</span>
+      <span class="sub"></span>
+      <kbd>3</kbd>
+    </button>
+  </div>
+<script>
+"use strict";
+
+// 60F = 1秒。
+// インパクトは「押したフレーム <= 26」で成功（発生フレームは引かない）。
+// 対空・弱は「押したフレーム + 発生 <= ヒットフレーム」で成功。
+// ラッシュのヒットフレームは要望に無かったため 30 を初期値にしている。
+const FRAME_MS = 1000 / 60;
+const RUSH_HIT_DEFAULT = 30;
+
+const MOVES = {
+  impact: { name: "インパクト", response: "impact", hit: 26, startup: 0, color: "#ff4a40" },
+  jump: { name: "飛び攻撃", response: "antiair", hit: 42, startup: 5, color: "#ffd15a" },
+  rush: { name: "ラッシュ", response: "light", hit: RUSH_HIT_DEFAULT, startup: 5, color: "#3dff8a" },
+};
+
+const POSES = {
+  idle:    { lean: -0.04, frontArm: 1.5, frontBend: 0.22, backArm: 2.15, backBend: 1.2, frontFoot: [24, 0],  backFoot: [-18, 0] },
+  windup:  { lean: 0.1,   frontArm: 0.15, frontBend: 1.25, backArm: 0.35, backBend: 1.0,  frontFoot: [12, 0],  backFoot: [-22, 0] },
+  punch:   { lean: -0.14, frontArm: 1.62, frontBend: 0.08, backArm: 0.45, backBend: 0.7,  frontFoot: [34, 0],  backFoot: [-14, 0] },
+  impact:  { lean: -0.2,  frontArm: 1.7,  frontBend: -0.05, backArm: 0.15, backBend: 1.1, frontFoot: [42, 0],  backFoot: [-26, 0] },
+  antiair: { lean: 0.16,  frontArm: 2.85, frontBend: 0.2,  backArm: 0.7,  backBend: 0.85, frontFoot: [16, 0],  backFoot: [-14, 0] },
+  jump:    { lean: -0.18, frontArm: 2.05, frontBend: 0.15, backArm: 1.1,  backBend: 0.55, frontFoot: [36, -50], backFoot: [-8, -34] },
+  rush:    { lean: -0.32, frontArm: 1.15, frontBend: 0.45, backArm: -0.25, backBend: 0.6, frontFoot: [48, 0], backFoot: [-4, 0] },
+  hit:     { lean: 0.2,   frontArm: 2.35, frontBend: 0.25, backArm: 2.15, backBend: 0.15, frontFoot: [10, 0], backFoot: [-20, 0] },
+};
+
+const PLAYER = { fill: "#8cbcff", line: "#24558f", back: "#5a92d4", glove: "#f5f7fb" };
+const CPU = { fill: "#ff8d6e", line: "#9a3b24", back: "#e06a4c", glove: "#ffe1a8" };
+const RED_PAL = { fill: "#ff5a4e", line: "#ffd0cb", back: "#ff8d84", glove: "#fff" };
+const GREEN_PAL = { fill: "#5dff9d", line: "#d8ffe8", back: "#8dffc0", glove: "#fff" };
+
+const POSE_FOR = { impact: "impact", antiair: "antiair", light: "punch" };
+const FONT = '"Noto Sans CJK JP", "Hiragino Sans", "Yu Gothic UI", "Yu Gothic", "Meiryo", sans-serif';
+
+const canvas = document.createElement("canvas");
+document.body.prepend(canvas);
+const ctx = canvas.getContext("2d");
+
+let phase = "intro";
+let attack = null;
+let attackStartMs = 0;
+let waitUntil = 0;
+let result = null;
+let resultAt = 0;
+let resultUntil = 0;
+let playerAction = null;
+let queued = null;
+let history = [];
+let particles = [];
+let shakeAmp = 0;
+let flash = 0;
+let flashRGB = "255,70,60";
+let lastNow = performance.now();
+let hiddenAt = 0;
+const stats = { ok: 0, total: 0, streak: 0, best: 0, sumF: 0, nF: 0 };
+const byMove = {
+  impact: { ok: 0, total: 0 },
+  jump: { ok: 0, total: 0 },
+  rush: { ok: 0, total: 0 },
+};
+let flyingCount = 0;
+const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+function currentFrame(elapsed) {
+  if (elapsed <= 0) return 1;
+  return Math.max(1, Math.ceil(elapsed - 1e-6));
+}
+
+function remainFrames(elapsed, limit) {
+  const frame = currentFrame(elapsed);
+  if (frame > limit) return 0;
+  return limit - frame + 1;
+}
+
+function inTimeFrame(frame, move) {
+  return frame + move.startup <= move.hit;
+}
+
+function inputLimit(move) {
+  return move.hit - move.startup;
+}
+
+function layout() {
+  const w = innerWidth;
+  const h = innerHeight;
+  const s = Math.max(0.64, Math.min(1.15, Math.min(w / 440, h / 500)));
+  const g = Math.min(h * 0.7, h - 124);
+  const gap = Math.max(88, Math.min(w * 0.2, 210));
+  return {
+    w, h, s, g,
+    playerX: w * 0.5 - gap,
+    cpuBase: w * 0.5 + gap,
+  };
+}
+
+function setRushHit(n) {
+  const startup = MOVES.rush.startup;
+  MOVES.rush.hit = Math.max(startup + 5, Math.min(60, n));
+  renderRules();
+}
+
+function renderRules() {
+  const impact = MOVES.impact;
+  const jump = MOVES.jump;
+  const rush = MOVES.rush;
+  const items = [
+    `赤いインパクト（${impact.hit}Fでヒット）→ ${impact.hit}F以内にインパクト`,
+    `飛び攻撃（${jump.hit}Fでヒット）→ 対空。発生${jump.startup}Fなので${inputLimit(jump)}F以内`,
+    `緑のラッシュ（${rush.hit}Fでヒット）→ 弱。発生${rush.startup}Fなので${inputLimit(rush)}F以内`,
+    "構え中に押すとフライング",
+  ];
+  document.getElementById("rules").innerHTML = items.map((text) => `<li>${text}</li>`).join("");
+  document.getElementById("rush-val").textContent = `${rush.hit}F（${inputLimit(rush)}F以内）`;
+  document.querySelector('[data-move="impact"] .sub').textContent = `${impact.hit}F以内`;
+  document.querySelector('[data-move="antiair"] .sub').textContent = `発生${jump.startup}F`;
+  document.querySelector('[data-move="light"] .sub').textContent = `発生${rush.startup}F`;
+}
+
+function markHint(move) {
+  document.querySelectorAll("#pad button").forEach((button) => {
+    button.classList.toggle("hint", button.dataset.move === move);
+  });
+}
+
+function pickKind() {
+  const kinds = ["impact", "jump", "rush"];
+  let pool = kinds;
+  if (history.length >= 2 && history[0] === history[1]) {
+    pool = kinds.filter((kind) => kind !== history[0]);
+  }
+  const kind = pool[Math.floor(Math.random() * pool.length)];
+  history.unshift(kind);
+  if (history.length > 2) history.length = 2;
+  return kind;
+}
+
+function press(move) {
+  if (phase !== "wait" && phase !== "attack") return;
+  if (queued || playerAction) return;
+  queued = { move, time: performance.now() };
+}
+
+function startGame() {
+  if (phase !== "intro") return;
+  document.getElementById("intro").hidden = true;
+  document.getElementById("abort").hidden = false;
+  beginWait(performance.now(), true);
+}
+
+function resetStats() {
+  stats.ok = 0;
+  stats.total = 0;
+  stats.streak = 0;
+  stats.best = 0;
+  stats.sumF = 0;
+  stats.nF = 0;
+  flyingCount = 0;
+  for (const row of Object.values(byMove)) {
+    row.ok = 0;
+    row.total = 0;
+  }
+}
+
+function rateText(ok, total) {
+  if (!total) return "—";
+  return `${Math.round((ok / total) * 100)}%`;
+}
+
+function renderSummary() {
+  const rows = ["impact", "jump", "rush"].map((key) => {
+    const row = byMove[key];
+    return `<tr><td>${MOVES[key].name}</td><td>${row.ok}</td><td>${row.total}</td><td>${rateText(row.ok, row.total)}</td></tr>`;
+  });
+  if (flyingCount > 0) {
+    rows.push(`<tr><td>フライング</td><td>0</td><td>${flyingCount}</td><td>0%</td></tr>`);
+  }
+  rows.push(`<tr class="total"><td>合計</td><td>${stats.ok}</td><td>${stats.total}</td><td>${rateText(stats.ok, stats.total)}</td></tr>`);
+  document.getElementById("summary-body").innerHTML = rows.join("");
+  document.getElementById("summary-note").textContent = stats.nF
+    ? `成功時の平均反応 ${Math.round(stats.sumF / stats.nF)}F`
+    : "";
+}
+
+function abortGame() {
+  if (phase === "intro" || phase === "summary") return;
+  phase = "summary";
+  attack = null;
+  playerAction = null;
+  result = null;
+  queued = null;
+  markHint(null);
+  renderSummary();
+  document.getElementById("summary").hidden = false;
+  document.getElementById("abort").hidden = true;
+}
+
+function resumeGame() {
+  if (phase !== "summary") return;
+  document.getElementById("summary").hidden = true;
+  document.getElementById("abort").hidden = false;
+  beginWait(performance.now(), true);
+}
+
+function backToTitle() {
+  if (phase !== "summary") return;
+  resetStats();
+  phase = "intro";
+  document.getElementById("summary").hidden = true;
+  document.getElementById("intro").hidden = false;
+  document.getElementById("abort").hidden = true;
+}
+
+function beginWait(now, first) {
+  phase = "wait";
+  attack = null;
+  playerAction = null;
+  result = null;
+  queued = null;
+  markHint(null);
+  const lo = first ? 1100 : 700;
+  const hi = first ? 1700 : 1600;
+  waitUntil = now + lo + Math.random() * (hi - lo);
+}
+
+function beginAttack(now) {
+  phase = "attack";
+  playerAction = null;
+  attack = { kind: pickKind() };
+  attackStartMs = now;
+}
+
+function finish(now, ok, reason, frame, ms) {
+  if (phase === "result") return;
+  const elapsed = attack ? (now - attackStartMs) / FRAME_MS : 0;
+  phase = "result";
+  resultAt = now;
+  resultUntil = now + (ok ? 1050 : 1350);
+  result = {
+    ok,
+    reason,
+    frame,
+    ms,
+    kind: attack ? attack.kind : null,
+    elapsed,
+    streakNote: null,
+  };
+  if (ok && (stats.streak + 1) % 5 === 0) result.streakNote = `${stats.streak + 1}連続`;
+  stats.total += 1;
+  if (result.kind && byMove[result.kind]) {
+    byMove[result.kind].total += 1;
+    if (ok) byMove[result.kind].ok += 1;
+  } else if (reason === "フライング") {
+    flyingCount += 1;
+  }
+  if (ok) {
+    stats.ok += 1;
+    stats.streak += 1;
+    stats.best = Math.max(stats.best, stats.streak);
+    stats.sumF += frame;
+    stats.nF += 1;
+    shakeAmp = reduceMotion ? 0 : 7;
+    flashRGB = "120,255,170";
+    flash = 0.55;
+  } else {
+    stats.streak = 0;
+    shakeAmp = reduceMotion ? 0 : 12;
+    flashRGB = "255,70,60";
+    flash = 0.55;
+  }
+  try { navigator.vibrate?.(ok ? 12 : 40); } catch (e) { /* 未対応でも続行 */ }
+  const L = layout();
+  burst((L.playerX + L.cpuBase) / 2, L.g - 96 * L.s, ok ? "#ffe08a" : "#ff5d4e");
+  if (attack) markHint(MOVES[attack.kind].response);
+  queued = null;
+}
+
+function burst(x, y, color) {
+  for (let i = 0; i < 18; i += 1) {
+    const angle = Math.random() * Math.PI * 2;
+    const speed = 80 + Math.random() * 240;
+    particles.push({
+      x, y,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed - 40,
+      life: 0.35 + Math.random() * 0.28,
+      age: 0,
+      color,
+      r: 2 + Math.random() * 3,
+    });
+  }
+}
+
+function update(now) {
+  let dt = (now - lastNow) / 1000;
+  lastNow = now;
+  if (dt < 0) dt = 0;
+  if (dt > 0.05) dt = 0.05;
+
+  if (!document.hidden) {
+    for (let i = particles.length - 1; i >= 0; i -= 1) {
+      const p = particles[i];
+      p.age += dt;
+      p.x += p.vx * dt;
+      p.y += p.vy * dt;
+      p.vy += 520 * dt;
+      if (p.age >= p.life) particles.splice(i, 1);
+    }
+    shakeAmp *= Math.exp(-6 * dt);
+    flash *= Math.exp(-7 * dt);
+  }
+
+  if (document.hidden || phase === "intro" || phase === "summary") return;
+
+  if (phase === "wait") {
+    if (queued && queued.time < waitUntil) {
+      queued = null;
+      finish(now, false, "フライング", null, null);
+      return;
+    }
+    if (now < waitUntil) return;
+    beginAttack(now);
+  }
+
+  if (phase === "attack") {
+    const move = MOVES[attack.kind];
+    const elapsed = (now - attackStartMs) / FRAME_MS;
+    const frameNow = currentFrame(elapsed);
+    if (queued && !playerAction) {
+      const q = queued;
+      queued = null;
+      const reaction = (q.time - attackStartMs) / FRAME_MS;
+      if (reaction < -1) {
+        finish(now, false, "フライング", null, null);
+        return;
+      }
+      const frame = currentFrame(Math.max(reaction, 0.001));
+      const ms = Math.round(Math.max(0, reaction) * FRAME_MS);
+      if (q.move !== move.response) {
+        playerAction = { button: q.move, frame, activeFrame: Infinity, ms };
+        finish(now, false, "技が違う", frame, ms);
+        return;
+      }
+      if (!inTimeFrame(frame, move)) {
+        playerAction = { button: q.move, frame, activeFrame: Infinity, ms };
+        finish(now, false, "遅い", frame, ms);
+        return;
+      }
+      playerAction = { button: q.move, frame, activeFrame: frame + move.startup, ms };
+    }
+    if (playerAction && frameNow >= playerAction.activeFrame) {
+      finish(now, true, "成功", playerAction.frame, playerAction.ms);
+      return;
+    }
+    if (frameNow > move.hit) finish(now, false, "被弾", null, null);
+    return;
+  }
+
+  if (phase === "result" && now >= resultUntil) beginWait(now);
+}
+
+function computeView(now, L) {
+  const kind = attack ? attack.kind : null;
+  const move = kind ? MOVES[kind] : null;
+  const elapsed = attack ? (result ? result.elapsed : (now - attackStartMs) / FRAME_MS) : 0;
+  const since = result ? (now - resultAt) / 1000 : 0;
+  let cpuPose = "idle";
+  let cpuAir = 0;
+  let rushT = 0;
+  let cpuX = L.cpuBase;
+  let playerX = L.playerX;
+  let playerPose = "idle";
+
+  if (kind && result?.reason !== "フライング") {
+    if (kind === "jump") {
+      const t = Math.min(elapsed / move.hit, 1);
+      cpuAir = 4 * 128 * L.s * t * (1 - t);
+      cpuPose = "jump";
+      if (result?.ok) {
+        cpuPose = "hit";
+        cpuAir += Math.min(0.28, since) * 260 * L.s;
+      }
+    } else if (kind === "rush") {
+      rushT = Math.min(elapsed / move.hit, 1);
+      cpuX = lerp(L.cpuBase, L.playerX + 86 * L.s, rushT);
+      cpuPose = result?.ok ? "hit" : "rush";
+      if (result?.ok) cpuX += Math.min(1, since * 5) * 22 * L.s;
+    } else {
+      const step = Math.min(elapsed / 8, 1);
+      cpuX = L.cpuBase - 30 * L.s * step;
+      cpuPose = "impact";
+    }
+  }
+
+  if (result && !result.ok) playerPose = "hit";
+  else if (playerAction) {
+    const pose = POSE_FOR[playerAction.button];
+    if (result?.ok) playerPose = pose;
+    else playerPose = currentFrame(elapsed) < playerAction.activeFrame ? "windup" : pose;
+  }
+
+  if (playerPose === "impact" || playerPose === "punch") playerX += 18 * L.s;
+  if (playerPose === "antiair") playerX += 8 * L.s;
+  if (result && !result.ok && result.reason !== "フライング") {
+    playerX -= Math.min(1, since * 6) * 20 * L.s;
+  }
+
+  const bob = !attack && !result ? Math.sin(now / 320) * 3 * L.s : 0;
+  return { kind, move, elapsed, cpuPose, cpuAir, cpuX, playerX, playerPose, bob, rushT };
+}
+
+function render(now) {
+  ensureSize();
+  const L = layout();
+  const view = computeView(now, L);
+  ctx.clearRect(0, 0, L.w, L.h);
+  drawArena(L);
+  if (phase !== "intro") {
+    ctx.save();
+    if (shakeAmp > 0.4) {
+      ctx.translate((Math.random() - 0.5) * shakeAmp * 2, (Math.random() - 0.5) * shakeAmp * 2);
+    }
+    drawWorld(now, L, view);
+    ctx.restore();
+  }
+  if (flash > 0.02) {
+    ctx.fillStyle = `rgba(${flashRGB},${flash * 0.16})`;
+    ctx.fillRect(0, 0, L.w, L.h);
+  }
+  if (phase !== "intro" && phase !== "summary") drawHud(L, view);
+}
+
+function ensureSize() {
+  const dpr = Math.min(devicePixelRatio || 1, 2);
+  const w = Math.floor(innerWidth * dpr);
+  const h = Math.floor(innerHeight * dpr);
+  if (canvas.width !== w || canvas.height !== h) {
+    canvas.width = w;
+    canvas.height = h;
+    canvas.style.width = `${innerWidth}px`;
+    canvas.style.height = `${innerHeight}px`;
+  }
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+
+function drawArena(L) {
+  const sky = ctx.createLinearGradient(0, 0, 0, L.g);
+  sky.addColorStop(0, "#1a2030");
+  sky.addColorStop(1, "#2a3348");
+  ctx.fillStyle = sky;
+  ctx.fillRect(0, 0, L.w, L.g);
+  const floor = ctx.createLinearGradient(0, L.g, 0, L.h);
+  floor.addColorStop(0, "#343c50");
+  floor.addColorStop(1, "#232838");
+  ctx.fillStyle = floor;
+  ctx.fillRect(0, L.g, L.w, L.h - L.g);
+  ctx.strokeStyle = "rgba(255,255,255,0.16)";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(0, L.g);
+  ctx.lineTo(L.w, L.g);
+  ctx.stroke();
+  ctx.strokeStyle = "rgba(255,255,255,0.06)";
+  ctx.beginPath();
+  ctx.ellipse(L.w / 2, L.g + 8, Math.min(L.w * 0.22, 180), 12, 0, 0, Math.PI * 2);
+  ctx.stroke();
+}
+
+function drawWorld(now, L, view) {
+  const shadowScale = (air) => Math.max(0.35, 1 - air / (160 * L.s));
+  drawShadow(view.playerX, L.g, 34 * L.s * shadowScale(0), 9 * L.s);
+  drawShadow(view.cpuX, L.g, 34 * L.s * shadowScale(view.cpuAir), 9 * L.s);
+
+  if (view.kind === "rush" && view.move) {
+    for (let i = 4; i >= 1; i -= 1) {
+      const past = Math.max(0, view.elapsed - i * 3.2);
+      const t = Math.min(past / view.move.hit, 1);
+      const gx = lerp(L.cpuBase, L.playerX + 86 * L.s, t);
+      drawPerson(gx, L.g - view.bob * 0.4, L.s, -1, "rush", GREEN_PAL, 0.12);
+    }
+    drawRushGlow(view.cpuX, L.g, L.s, view.elapsed);
+  }
+  if (view.kind === "impact") drawImpactFx(view.cpuX - 24 * L.s, L.g - 108 * L.s, view.elapsed);
+  if (view.kind === "jump") drawJumpCue(view.cpuX, L.g - view.cpuAir, L.s, view.elapsed);
+
+  if (view.kind === "impact" && view.elapsed < 7 && !result) {
+    drawPerson(view.cpuX, L.g, L.s * 1.05, -1, view.cpuPose, RED_PAL, 0.55 * (1 - view.elapsed / 7));
+  }
+  if (view.kind === "rush" && view.elapsed < 7 && !result) {
+    drawPerson(view.cpuX, L.g, L.s * 1.05, -1, view.cpuPose, GREEN_PAL, 0.45 * (1 - view.elapsed / 7));
+  }
+
+  drawPerson(view.cpuX, L.g - view.cpuAir + view.bob * 0.5, L.s, -1, view.cpuPose, CPU, 1);
+  drawPerson(view.playerX, L.g + view.bob, L.s, 1, view.playerPose, PLAYER, 1);
+  if (!attack) {
+    drawTag("CPU", view.cpuX, L.g - 204 * L.s);
+    drawTag("自分", view.playerX, L.g - 204 * L.s);
+  }
+
+  for (const p of particles) {
+    ctx.globalAlpha = Math.max(0, 1 - p.age / p.life);
+    ctx.fillStyle = p.color;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+  }
+}
+
+function drawShadow(x, y, rx, ry) {
+  ctx.fillStyle = "rgba(0,0,0,0.28)";
+  ctx.beginPath();
+  ctx.ellipse(x, y, rx, ry, 0, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+function drawImpactFx(x, y, elapsed) {
+  for (let i = 0; i < 3; i += 1) {
+    const t = (elapsed * 0.16 + i / 3) % 1;
+    ctx.beginPath();
+    ctx.strokeStyle = `rgba(255, 60, 48, ${0.9 * (1 - t)})`;
+    ctx.lineWidth = 5 * (1 - t * 0.45);
+    ctx.arc(x, y, 14 + t * 84, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+}
+
+function drawRushGlow(x, y, s, elapsed) {
+  const pop = Math.max(0, 1 - elapsed / 9);
+  ctx.fillStyle = `rgba(70, 255, 140, ${0.18 + pop * 0.38})`;
+  ctx.beginPath();
+  ctx.ellipse(x, y - 86 * s, (30 + pop * 16) * s, 72 * s, 0, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+function drawJumpCue(x, y, s, elapsed) {
+  const alpha = Math.max(0.45, 1 - elapsed / 16);
+  ctx.strokeStyle = `rgba(255, 214, 90, ${alpha})`;
+  ctx.lineWidth = 5;
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  for (let i = 0; i < 2; i += 1) {
+    const yy = y - (196 + i * 18) * s;
+    ctx.beginPath();
+    ctx.moveTo(x - 16 * s, yy + 12 * s);
+    ctx.lineTo(x, yy);
+    ctx.lineTo(x + 16 * s, yy + 12 * s);
+    ctx.stroke();
+  }
+}
+
+function drawPerson(x, y, s, face, pose, pal, alpha) {
+  const P = POSES[pose] || POSES.idle;
+  const hipY = -92;
+  const shoulderY = -136;
+  const headY = -164;
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.scale(s * face, s);
+  ctx.globalAlpha = alpha;
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+
+  ctx.strokeStyle = pal.back;
+  ctx.fillStyle = pal.back;
+  drawPlantedLeg(0, hipY, P.backFoot[0], P.backFoot[1], -1);
+  ctx.strokeStyle = pal.line;
+  ctx.fillStyle = pal.fill;
+  drawPlantedLeg(0, hipY, P.frontFoot[0], P.frontFoot[1], 1);
+
+  ctx.save();
+  ctx.translate(0, hipY);
+  ctx.rotate(P.lean);
+  ctx.translate(0, -hipY);
+
+  ctx.strokeStyle = pal.back;
+  ctx.fillStyle = pal.back;
+  drawArm(-2, shoulderY + 4, P.backArm, P.backBend, 10);
+
+  ctx.fillStyle = pal.fill;
+  ctx.strokeStyle = pal.line;
+  ctx.lineWidth = 5;
+  ctx.beginPath();
+  ctx.roundRect(-18, shoulderY - 2, 36, hipY + 10 - (shoulderY - 2), 16);
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = pal.line;
+  ctx.fillRect(-18, hipY - 16, 36, 9);
+
+  ctx.fillStyle = pal.fill;
+  ctx.strokeStyle = pal.line;
+  ctx.lineWidth = 5;
+  ctx.beginPath();
+  ctx.arc(4, headY, 21, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = "#1b2030";
+  ctx.beginPath();
+  ctx.arc(13, headY - 2, 2.6, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.strokeStyle = pal.line;
+  ctx.fillStyle = pal.glove;
+  drawArm(6, shoulderY + 8, P.frontArm, P.frontBend, 11);
+  ctx.restore();
+  ctx.restore();
+}
+
+function drawPlantedLeg(hipX, hipY, footX, footY, bend) {
+  const thigh = 48;
+  const shin = 46;
+  const dx = footX - hipX;
+  const dy = footY - hipY;
+  const reach = Math.hypot(dx, dy) || 1;
+  const max = thigh + shin - 1;
+  const scale = reach > max ? max / reach : 1;
+  const fx = hipX + dx * scale;
+  const fy = hipY + dy * scale;
+  const d = Math.hypot(fx - hipX, fy - hipY) || 1;
+  const along = (thigh * thigh - shin * shin + d * d) / (2 * d);
+  const span = Math.sqrt(Math.max(0, thigh * thigh - along * along));
+  const px = (fx - hipX) / d;
+  const py = (fy - hipY) / d;
+  let nx = -py;
+  let ny = px;
+  if (nx * bend + ny * -0.25 < 0) {
+    nx = -nx;
+    ny = -ny;
+  }
+  const kx = hipX + px * along + nx * span;
+  const ky = hipY + py * along + ny * span;
+  ctx.lineWidth = 12;
+  ctx.beginPath();
+  ctx.moveTo(hipX, hipY);
+  ctx.lineTo(kx, ky);
+  ctx.lineTo(fx, fy);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(fx, fy, 6, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+function drawArm(sx, sy, raise, bend, width) {
+  const upper = 32;
+  const fore = 30;
+  const a1 = Math.PI / 2 - raise;
+  const ex = sx + Math.cos(a1) * upper;
+  const ey = sy + Math.sin(a1) * upper;
+  const a2 = a1 + bend;
+  const hx = ex + Math.cos(a2) * fore;
+  const hy = ey + Math.sin(a2) * fore;
+  ctx.lineWidth = width;
+  ctx.beginPath();
+  ctx.moveTo(sx, sy);
+  ctx.lineTo(ex, ey);
+  ctx.lineTo(hx, hy);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(hx, hy, width * 0.62, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+function drawTag(text, x, y) {
+  ctx.font = `700 12px ${FONT}`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "bottom";
+  ctx.fillStyle = "rgba(255,255,255,0.62)";
+  ctx.fillText(text, x, y);
+}
+
+function drawHud(L, view) {
+  ctx.textBaseline = "top";
+  ctx.textAlign = "left";
+  ctx.font = `700 14px ${FONT}`;
+  ctx.fillStyle = "#f4f7ff";
+  const avg = stats.nF ? `平均 ${Math.round(stats.sumF / stats.nF)}F` : "";
+  const narrow = L.w < 560;
+  if (narrow) {
+    ctx.fillText(`成功 ${stats.ok}/${stats.total}    連続 ${stats.streak}`, 12, 14);
+    ctx.fillText(`最大 ${stats.best}${avg ? `    ${avg}` : ""}`, 12, 32);
+  } else {
+    ctx.fillText(`成功 ${stats.ok}/${stats.total}    連続 ${stats.streak}    最大 ${stats.best}${avg ? `    ${avg}` : ""}`, 16, 16);
+  }
+
+  let title = "構え";
+  let sub = "攻撃を待つ";
+  let color = "#d5dced";
+  let remainRatio = null;
+  if (phase === "attack" && view.move) {
+    title = view.move.name;
+    const limit = inputLimit(view.move);
+    const remain = remainFrames(view.elapsed, limit);
+    sub = remain > 0 ? `残り ${remain}F` : "入力締切";
+    color = view.move.color;
+    remainRatio = remain / limit;
+  } else if (phase === "result" && result) {
+    if (result.ok) {
+      title = "成功";
+      color = "#7dffa8";
+      sub = `反応 ${result.frame}F / ${result.ms}ms`;
+      if (result.streakNote) sub += `   ${result.streakNote}`;
+    } else if (result.reason === "フライング") {
+      title = "フライング";
+      color = "#ffcf70";
+      sub = "攻撃の前に押した";
+    } else if (result.reason === "技が違う") {
+      title = "被弾";
+      color = "#ff6d64";
+      sub = `技が違う（${result.frame}F）`;
+    } else if (result.reason === "遅い") {
+      title = "被弾";
+      color = "#ff6d64";
+      sub = `遅かった（${result.frame}F / ${result.ms}ms）`;
+    } else {
+      title = "被弾";
+      color = "#ff6d64";
+      sub = "ボタンが間に合わなかった";
+    }
+  }
+
+  if (remainRatio != null) {
+    ctx.fillStyle = "rgba(255,255,255,0.14)";
+    ctx.fillRect(0, 0, L.w, 8);
+    ctx.fillStyle = remainRatio < 0.28 ? "#ff5a52" : color;
+    ctx.fillRect(0, 0, Math.max(0, L.w * remainRatio), 8);
+  }
+
+  ctx.textAlign = "center";
+  ctx.font = `800 ${phase === "attack" ? 32 : 28}px ${FONT}`;
+  ctx.fillStyle = color;
+  const titleY = phase === "attack" ? (narrow ? 56 : 40) : (narrow ? 62 : 46);
+  ctx.fillText(title, L.w / 2, titleY);
+  ctx.font = `700 ${phase === "attack" ? 20 : 16}px ${FONT}`;
+  ctx.fillStyle = "rgba(255,255,255,0.88)";
+  ctx.fillText(sub, L.w / 2, titleY + (phase === "attack" ? 40 : 36));
+}
+
+function lerp(a, b, t) {
+  return a + (b - a) * t;
+}
+
+function loop(now) {
+  update(now);
+  render(now);
+  requestAnimationFrame(loop);
+}
+
+document.querySelectorAll("#pad button").forEach((button) => {
+  button.addEventListener("pointerdown", (event) => {
+    event.preventDefault();
+    press(button.dataset.move);
+  });
+});
+
+document.getElementById("start").addEventListener("pointerdown", (event) => {
+  event.preventDefault();
+  startGame();
+});
+
+document.getElementById("abort").addEventListener("pointerdown", (event) => {
+  event.preventDefault();
+  abortGame();
+});
+
+document.getElementById("resume").addEventListener("pointerdown", (event) => {
+  event.preventDefault();
+  resumeGame();
+});
+
+document.getElementById("back-title").addEventListener("pointerdown", (event) => {
+  event.preventDefault();
+  backToTitle();
+});
+
+document.getElementById("rush-dec").addEventListener("pointerdown", (event) => {
+  event.preventDefault();
+  setRushHit(MOVES.rush.hit - 1);
+});
+document.getElementById("rush-inc").addEventListener("pointerdown", (event) => {
+  event.preventDefault();
+  setRushHit(MOVES.rush.hit + 1);
+});
+
+window.addEventListener("keydown", (event) => {
+  if (event.repeat) return;
+  if (event.code === "Escape") {
+    abortGame();
+    return;
+  }
+  if (phase === "intro" && (event.code === "Enter" || event.code === "Space")) {
+    startGame();
+    return;
+  }
+  const map = {
+    Digit1: "light", Numpad1: "light",
+    Digit2: "antiair", Numpad2: "antiair",
+    Digit3: "impact", Numpad3: "impact",
+    KeyJ: "light", KeyK: "antiair", KeyL: "impact",
+  };
+  if (map[event.code]) press(map[event.code]);
+});
+
+document.addEventListener("visibilitychange", () => {
+  const now = performance.now();
+  if (document.hidden) {
+    hiddenAt = now;
+    return;
+  }
+  if (!hiddenAt) return;
+  const dt = now - hiddenAt;
+  attackStartMs += dt;
+  waitUntil += dt;
+  resultUntil += dt;
+  resultAt += dt;
+  if (queued) queued.time += dt;
+  lastNow = now;
+  hiddenAt = 0;
+});
+
+document.addEventListener("touchmove", (event) => event.preventDefault(), { passive: false });
+document.addEventListener("contextmenu", (event) => event.preventDefault());
+
+renderRules();
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>

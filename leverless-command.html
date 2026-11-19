@@ -140,6 +140,33 @@
     font-size: 14px;
     font-weight: 700;
   }
+  .cmd-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .cmd-actions button {
+    height: 44px;
+    border: 0;
+    border-radius: 12px;
+    background: #2c3348;
+    font-weight: 800;
+  }
+  .toggles { display: flex; flex-direction: column; gap: 8px; }
+  .toggle {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    min-height: 48px;
+    padding: 0 14px;
+    border-radius: 12px;
+    background: #2c3348;
+    font-size: 15px;
+    font-weight: 800;
+  }
+  .toggle input {
+    width: 26px;
+    height: 26px;
+    margin: 0;
+    accent-color: #8cbcff;
+  }
   .bind-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -246,9 +273,14 @@
       <h1>コマンド練習</h1>
       <p class="lead">レバーレス（ヒットボックス）の方向入力です。判定は60fpsで、60Fが1秒です。</p>
 
-      <label class="field">コマンド
-        <select id="command"></select>
-      </label>
+      <div class="field">出題
+        <div class="cmd-actions">
+          <button type="button" id="enable-all">全部オン</button>
+          <button type="button" id="enable-none">全部オフ</button>
+        </div>
+        <div id="command-toggles" class="toggles"></div>
+      </div>
+      <p class="hint">オンのコマンドだけを出します。全部オフだとフリーモードになり、成功・失敗は判定しません。</p>
 
       <div class="field">向き
         <div class="seg" id="side">
@@ -396,10 +428,14 @@ function defaultSettings() {
     socdV: "up",
     leniency: 15,
     charge: 45,
-    command: "236",
+    enabled: defaultEnabled(),
     side: "right",
     guide: true,
   };
+}
+
+function defaultEnabled() {
+  return Object.fromEntries(COMMANDS.map((cmd) => [cmd.id, true]));
 }
 
 function loadSettings() {
@@ -417,7 +453,15 @@ function loadSettings() {
     if (["up", "neutral", "down", "last", "first"].includes(raw.socdV)) settings.socdV = raw.socdV;
     if (typeof raw.leniency === "number") settings.leniency = clamp(Math.round(raw.leniency), 4, 36);
     if (typeof raw.charge === "number") settings.charge = clamp(Math.round(raw.charge), 20, 60);
-    if (raw.command === "random" || COMMAND_BY_ID[raw.command]) settings.command = raw.command;
+    if (raw.enabled && typeof raw.enabled === "object") {
+      for (const cmd of COMMANDS) {
+        if (typeof raw.enabled[cmd.id] === "boolean") settings.enabled[cmd.id] = raw.enabled[cmd.id];
+      }
+    } else if (raw.command === "random") {
+      settings.enabled = defaultEnabled();
+    } else if (COMMAND_BY_ID[raw.command]) {
+      for (const cmd of COMMANDS) settings.enabled[cmd.id] = cmd.id === raw.command;
+    }
     if (raw.side === "left" || raw.side === "right") settings.side = raw.side;
     if (typeof raw.guide === "boolean") settings.guide = raw.guide;
     if (typeof raw.useDpad === "boolean") settings.useDpad = raw.useDpad;
@@ -692,10 +736,12 @@ let holds = { left: false, down: false, right: false, up: false };
 let mode = "live";
 let cooldown = 0;
 let lastRandomId = "";
-let currentCmd = COMMAND_BY_ID[settings.command] || COMMANDS[0];
-let pendingCmd = currentCmd;
-let attempt = createAttempt(currentCmd);
+let currentCmd = null;
+let pendingCmd = null;
+let attempt = null;
 let lastResult = null;
+let shadows = [];
+let recognized = null;
 let history = [];
 let open = null;
 let seenInput = false;
@@ -767,13 +813,29 @@ function updateEngagement(nextHolds) {
   }
 }
 
+function enabledCommands() {
+  return COMMANDS.filter((cmd) => settings.enabled[cmd.id]);
+}
+
+function isFreeMode() {
+  return enabledCommands().length === 0;
+}
+
 function pickCommand() {
-  if (settings.command !== "random") return COMMAND_BY_ID[settings.command];
-  let pool = COMMANDS.filter((cmd) => cmd.id !== lastRandomId);
-  if (!pool.length) pool = COMMANDS;
+  const enabled = enabledCommands();
+  if (!enabled.length) return null;
+  let pool = enabled.filter((cmd) => cmd.id !== lastRandomId);
+  if (!pool.length) pool = enabled;
   const cmd = pool[Math.floor(Math.random() * pool.length)];
   lastRandomId = cmd.id;
   return cmd;
+}
+
+function commandWeight(cmd) {
+  if (cmd.seq) return cmd.seq.length;
+  if (cmd.kind === "circle") return 8;
+  if (cmd.kind === "charge") return 5;
+  return 1;
 }
 
 function currentResolved() {
@@ -789,7 +851,25 @@ function startLive(cmd) {
   mode = "live";
 }
 
+function resetShadows() {
+  shadows = COMMANDS.map((cmd) => createAttempt(cmd));
+}
+
+function enterFree() {
+  currentCmd = null;
+  pendingCmd = null;
+  attempt = null;
+  lastResult = null;
+  recognized = null;
+  mode = "free";
+  resetShadows();
+}
+
 function armOrStart(cmd) {
+  if (!cmd) {
+    enterFree();
+    return;
+  }
   pendingCmd = cmd;
   const resolved = currentResolved();
   if (resolved.notation === 5) startLive(cmd);
@@ -797,8 +877,46 @@ function armOrStart(cmd) {
     currentCmd = cmd;
     attempt = createAttempt(cmd);
     lastResult = null;
+    recognized = null;
     mode = "arm";
   }
+}
+
+function applyEnabledChange() {
+  saveSettings();
+  renderToggles();
+  const enabled = enabledCommands();
+  if (!enabled.length) {
+    enterFree();
+    return;
+  }
+  if (mode === "free" || !currentCmd || !settings.enabled[currentCmd.id]) {
+    armOrStart(pickCommand());
+  }
+}
+
+function stepShadows() {
+  const hits = [];
+  for (const shadow of shadows) {
+    if (stepAttempt(shadow, notation, frame, settings) === "success") {
+      hits.push(COMMAND_BY_ID[shadow.cmdId]);
+    }
+  }
+  if (hits.length) {
+    hits.sort((a, b) => commandWeight(b) - commandWeight(a));
+    const hit = hits[0];
+    recognized = {
+      id: hit.id,
+      notation: hit.notation,
+      name: hit.name,
+      until: frame + 80,
+    };
+  } else if (recognized && frame > recognized.until) {
+    recognized = null;
+  }
+  shadows = shadows.map((shadow) => (
+    shadow.phase === "done" ? createAttempt(COMMAND_BY_ID[shadow.cmdId]) : shadow
+  ));
 }
 
 function pushHistory(dir, phys, frames) {
@@ -825,7 +943,7 @@ function noteDirection(dir, phys) {
 }
 
 function expectedNotation() {
-  if (!currentCmd || attempt.result || mode !== "live") return null;
+  if (mode !== "live" || !currentCmd || !attempt || attempt.result) return null;
   if (currentCmd.kind === "motion") {
     if (attempt.progress >= currentCmd.seq.length) return null;
     return currentCmd.seq[attempt.progress];
@@ -922,6 +1040,10 @@ function tick() {
     if (notation === 5) startLive(pendingCmd);
     return;
   }
+  if (mode === "free") {
+    stepShadows();
+    return;
+  }
   const result = stepAttempt(attempt, notation, frame, settings);
   if (result) recordResult(result);
 }
@@ -970,7 +1092,12 @@ function renderBinds() {
   document.getElementById("guide").checked = settings.guide;
   document.getElementById("use-dpad").checked = settings.useDpad;
   document.getElementById("use-stick").checked = settings.useStick;
-  document.getElementById("command").value = settings.command;
+}
+
+function renderToggles() {
+  for (const input of document.querySelectorAll("#command-toggles input")) {
+    input.checked = !!settings.enabled[input.dataset.cmd];
+  }
 }
 
 let padStatusText = "";
@@ -1181,7 +1308,9 @@ function layoutOf(w, h) {
   const margin = phone ? 14 : 22;
   const s = phone ? clamp(w / 390, 0.92, 1.15) : clamp(Math.min(w / 920, h / 680), 0.75, 1.15);
   const cardY = phone ? 54 : 58;
-  let cardH = phone ? (currentCmd && currentCmd.kind === "charge" ? 178 : 156) : Math.max(150, 172 * s);
+  let cardH = phone
+    ? (!currentCmd ? 148 : currentCmd.kind === "charge" ? 178 : 156)
+    : Math.max(150, 172 * s);
   let historyH = phone ? 96 : Math.max(104, 116 * s);
   const bottomPad = 10;
   let historyY = h - buttons.bandH - bottomPad - historyH - 8;
@@ -1232,8 +1361,23 @@ function drawTarget(box) {
   const cmd = currentCmd;
   const left = margin + 22;
   let cursor = cardY + 28 * s;
-  fillText(settings.command === "random" ? "ランダム" : "指定", left, cursor, Math.round(12 * s), C.dim, "left", 700);
-  fillText(settings.side === "left" ? "左向き" : "右向き", w - margin - 22, cursor, Math.round(13 * s), C.blueSoft, "right", 800);
+  const sideLabel = settings.side === "left" ? "左向き" : "右向き";
+  fillText(sideLabel, w - margin - 22, cursor, Math.round(13 * s), C.blueSoft, "right", 800);
+  if (!cmd || mode === "free") {
+    fillText("フリーモード", left, cursor, Math.round(12 * s), C.dim, "left", 700);
+    cursor += 34 * s;
+    fillText("フリー", left, cursor, Math.round(36 * s), C.text, "left", 800);
+    cursor += 28 * s;
+    fillText("判定なし", left, cursor, Math.round(14 * s), C.muted, "left", 700);
+    if (recognized && frame <= recognized.until) {
+      cursor += 28 * s;
+      const found = recognized.name ? `${recognized.notation} ${recognized.name}` : recognized.notation;
+      fillText(found, left, cursor, Math.round(18 * s), C.green, "left", 800);
+    }
+    return;
+  }
+  const enabledCount = enabledCommands().length;
+  fillText(enabledCount > 1 ? `${enabledCount}種` : "指定", left, cursor, Math.round(12 * s), C.dim, "left", 700);
   cursor += 28 * s;
   fillText(cmd.notation, left, cursor, Math.round(40 * s), C.text, "left", 800);
   const notationWidth = ctx.measureText(cmd.notation).width;
@@ -1471,22 +1615,30 @@ function loop(now) {
 }
 
 function bindControls() {
-  const command = document.getElementById("command");
-  const random = document.createElement("option");
-  random.value = "random";
-  random.textContent = "ランダム";
-  command.appendChild(random);
+  const toggles = document.getElementById("command-toggles");
   for (const cmd of COMMANDS) {
-    const option = document.createElement("option");
-    option.value = cmd.id;
-    option.textContent = commandLabel(cmd);
-    command.appendChild(option);
+    const label = document.createElement("label");
+    label.className = "toggle";
+    const name = document.createElement("span");
+    name.textContent = commandLabel(cmd);
+    const input = document.createElement("input");
+    input.type = "checkbox";
+    input.dataset.cmd = cmd.id;
+    input.checked = !!settings.enabled[cmd.id];
+    input.addEventListener("change", () => {
+      settings.enabled[cmd.id] = input.checked;
+      applyEnabledChange();
+    });
+    label.append(name, input);
+    toggles.append(label);
   }
-  command.value = settings.command;
-  command.addEventListener("change", () => {
-    settings.command = command.value;
-    saveSettings();
-    armOrStart(pickCommand());
+  document.getElementById("enable-all").addEventListener("click", () => {
+    for (const cmd of COMMANDS) settings.enabled[cmd.id] = true;
+    applyEnabledChange();
+  });
+  document.getElementById("enable-none").addEventListener("click", () => {
+    for (const cmd of COMMANDS) settings.enabled[cmd.id] = false;
+    applyEnabledChange();
   });
 
   document.getElementById("side").addEventListener("click", (event) => {
@@ -1562,6 +1714,7 @@ function bindControls() {
     renderBinds();
   });
   document.getElementById("skip").addEventListener("click", () => {
+    if (isFreeMode()) return;
     armOrStart(pickCommand());
     renderStats();
   });
@@ -1618,10 +1771,13 @@ document.addEventListener("touchmove", (event) => {
 window.addEventListener("gesturestart", (event) => event.preventDefault());
 window.addEventListener("gesturechange", (event) => event.preventDefault());
 
-if (settings.command === "random") currentCmd = pickCommand();
-else currentCmd = COMMAND_BY_ID[settings.command] || COMMANDS[0];
-pendingCmd = currentCmd;
-attempt = createAttempt(currentCmd);
+if (isFreeMode()) enterFree();
+else {
+  currentCmd = pickCommand();
+  pendingCmd = currentCmd;
+  attempt = createAttempt(currentCmd);
+  mode = "live";
+}
 
 bindControls();
 renderPadStatus();
@@ -1648,12 +1804,20 @@ window.__trainer = {
       holds: { ...holds },
       stamps: { ...stamps },
       mode,
-      attempt: { ...attempt, cmdId: attempt.cmdId, result: attempt.result, reason: attempt.reason, progress: attempt.progress, charge: attempt.charge, framesTaken: attempt.framesTaken },
+      attempt: attempt ? {
+        cmdId: attempt.cmdId,
+        result: attempt.result,
+        reason: attempt.reason,
+        progress: attempt.progress,
+        charge: attempt.charge,
+        framesTaken: attempt.framesTaken,
+      } : null,
       stats: { ...stats },
       history: history.slice(),
       open: open ? { ...open } : null,
       lastResult: lastResult ? { ...lastResult } : null,
-      command: currentCmd.id,
+      command: currentCmd ? currentCmd.id : null,
+      recognized: recognized ? { notation: recognized.notation, name: recognized.name } : null,
       side: settings.side,
       rects: { ...buttonRects },
     };

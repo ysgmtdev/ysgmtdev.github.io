@@ -220,6 +220,13 @@
   table.scores th { color: #8b95ab; font-weight: 700; }
   details { margin-top: 8px; }
   details summary { cursor: pointer; color: #b7c0d4; font-size: 13px; font-weight: 700; }
+  .version {
+    margin: 18px 0 0;
+    color: #8b95ab;
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+  }
   .actions { display: flex; flex-direction: column; }
   .sr {
     position: absolute;
@@ -318,11 +325,13 @@
       <p class="hint">初期値はレバーレスと同じです。左右同時はニュートラル、上下同時は上。溜め縦は下を押したまま上を足せます。</p>
 
       <label class="check"><input id="guide" type="checkbox" checked> 次の入力をガイドする</label>
+      <label class="check"><input id="require-attack" type="checkbox" checked> 最後に攻撃ボタン（P）が必要</label>
+      <p class="hint">オンのとき、方向が完成してから許容フレーム以内に P を押すと成功です。波動拳なら 236P です。</p>
 
       <h2>キーボード</h2>
       <div class="bind-grid" id="key-binds"></div>
       <button type="button" id="reset-keys">キーを初期化</button>
-      <p class="hint">初期値は A 左 / S 下 / D 右 / Space 上。枠を押してから、割り当てたいキーを押します。Escで取消。</p>
+      <p class="hint">初期値は A 左 / S 下 / D 右 / Space 上 / J 攻撃。枠を押してから、割り当てたいキーを押します。Escで取消。</p>
 
       <h2>ゲームパッド</h2>
       <p id="pad-status">未接続。ボタンを押すと認識します。</p>
@@ -331,7 +340,7 @@
       <label class="check"><input id="use-stick" type="checkbox" checked> 左スティックを使う</label>
       <div class="bind-grid" id="pad-binds"></div>
       <button type="button" id="clear-pad">パッド割当をクリア</button>
-      <p class="hint">方向パッドと左スティックに加え、押したボタンを直接割り当てられます。ヒットボックスが別のボタン番号を出すときに使います。</p>
+      <p class="hint">方向パッドと左スティックに加え、押したボタンを直接割り当てられます。攻撃の初期ボタンは A です。</p>
 
       <h2>成績</h2>
       <p id="announce" class="sr" aria-live="polite"></p>
@@ -347,6 +356,7 @@
         <button type="button" id="skip">次の問題</button>
         <button type="button" id="reset-stats">成績をリセット</button>
       </div>
+      <p class="version">版 5</p>
     </aside>
   </div>
 <script>
@@ -357,9 +367,11 @@
 // コマンドの数字はキャラの向き基準。左向きのときは左右だけを反転する。
 const FRAME_MS = 1000 / 60;
 const STORAGE_KEY = "leverless-command-settings-v1";
+const APP_VERSION = "5";
 const DIRS = ["left", "down", "right", "up"];
-const DIR_LABEL = { left: "左", down: "下", right: "右", up: "上" };
-const DEFAULT_KEYS = { left: "KeyA", down: "KeyS", right: "KeyD", up: "Space" };
+const INPUTS = ["left", "down", "right", "up", "punch"];
+const DIR_LABEL = { left: "左", down: "下", right: "右", up: "上", punch: "P" };
+const DEFAULT_KEYS = { left: "KeyA", down: "KeyS", right: "KeyD", up: "Space", punch: "KeyJ" };
 const ARROW = {
   1: "↙", 2: "↓", 3: "↘",
   4: "←", 5: "・", 6: "→",
@@ -409,9 +421,11 @@ const C = {
   blueSoft: "#8cbcff",
   green: "#3dff8a",
   red: "#ff5a4e",
-  gold: "#ffd15a",
-  ink: "#141822",
-};
+    gold: "#ffd15a",
+    ink: "#141822",
+    attack: "#d83a32",
+    attackHot: "#ff5d4e",
+  };
 
 const canvas = document.getElementById("view");
 const ctx = canvas.getContext("2d");
@@ -421,7 +435,7 @@ function clamp(n, lo, hi) { return Math.max(lo, Math.min(hi, n)); }
 function defaultSettings() {
   return {
     keys: { ...DEFAULT_KEYS },
-    padButtons: { left: null, down: null, right: null, up: null },
+    padButtons: { left: null, down: null, right: null, up: null, punch: 0 },
     useDpad: true,
     useStick: true,
     socdH: "neutral",
@@ -431,6 +445,7 @@ function defaultSettings() {
     enabled: defaultEnabled(),
     side: "right",
     guide: true,
+    requireAttack: true,
   };
 }
 
@@ -443,11 +458,12 @@ function loadSettings() {
   try {
     const raw = JSON.parse(localStorage.getItem(STORAGE_KEY) || "null");
     if (!raw || typeof raw !== "object") return settings;
-    for (const dir of DIRS) {
+    for (const dir of INPUTS) {
       const code = raw.keys?.[dir];
       if (typeof code === "string" && code !== "Escape" && code !== "Tab") settings.keys[dir] = code;
-      const button = raw.padButtons?.[dir];
-      if (Number.isInteger(button) && button >= 0 && button < 32) settings.padButtons[dir] = button;
+      if (!raw.padButtons || !Object.prototype.hasOwnProperty.call(raw.padButtons, dir)) continue;
+      const button = raw.padButtons[dir];
+      settings.padButtons[dir] = Number.isInteger(button) && button >= 0 && button < 32 ? button : null;
     }
     if (["neutral", "last", "first"].includes(raw.socdH)) settings.socdH = raw.socdH;
     if (["up", "neutral", "down", "last", "first"].includes(raw.socdV)) settings.socdV = raw.socdV;
@@ -466,6 +482,7 @@ function loadSettings() {
     if (typeof raw.guide === "boolean") settings.guide = raw.guide;
     if (typeof raw.useDpad === "boolean") settings.useDpad = raw.useDpad;
     if (typeof raw.useStick === "boolean") settings.useStick = raw.useStick;
+    if (typeof raw.requireAttack === "boolean") settings.requireAttack = raw.requireAttack;
   } catch (e) { /* 壊れた保存値は初期値 */ }
   return settings;
 }
@@ -719,7 +736,10 @@ function padButtonLabel(index) {
 }
 
 const keyDown = new Set();
-const pointerHeld = { left: false, down: false, right: false, up: false };
+const pointerHeld = { left: false, down: false, right: false, up: false, punch: false };
+let punchHeld = false;
+let punchWas = false;
+let punchEdge = false;
 const pointers = new Map();
 const stamps = { left: 0, down: 0, right: 0, up: 0 };
 const combinedHeld = { left: false, down: false, right: false, up: false };
@@ -748,7 +768,7 @@ let seenInput = false;
 let paused = false;
 let lastNow = performance.now();
 let acc = 0;
-const buttonRects = { left: null, down: null, right: null, up: null };
+const buttonRects = { left: null, down: null, right: null, up: null, punch: null };
 const stats = { ok: 0, total: 0, streak: 0, best: 0, sumFrames: 0 };
 const byCmd = {};
 
@@ -895,20 +915,49 @@ function applyEnabledChange() {
   }
 }
 
+function advanceAttempt(attempt, dir, frame, attackEdge) {
+  if (!attempt || attempt.phase === "done") return null;
+  if (attempt.phase === "punch") {
+    if (attackEdge) {
+      attempt.withPunch = true;
+      return finishAttempt(attempt, "success", "", frame);
+    }
+    if (frame - attempt.anchorFrame > settings.leniency) {
+      return finishAttempt(attempt, "fail", "ボタンが遅い", frame);
+    }
+    return null;
+  }
+  const result = stepAttempt(attempt, dir, frame, settings);
+  if (result === "success" && settings.requireAttack) {
+    if (attackEdge) {
+      attempt.withPunch = true;
+      return "success";
+    }
+    attempt.phase = "punch";
+    attempt.result = null;
+    attempt.reason = "";
+    attempt.anchorFrame = frame;
+    attempt.withPunch = false;
+    return null;
+  }
+  if (result === "success" && attackEdge) attempt.withPunch = true;
+  return result;
+}
+
 function stepShadows() {
   const hits = [];
   for (const shadow of shadows) {
-    if (stepAttempt(shadow, notation, frame, settings) === "success") {
-      hits.push(COMMAND_BY_ID[shadow.cmdId]);
-    }
+    if (advanceAttempt(shadow, notation, frame, punchEdge) === "success") hits.push(shadow);
   }
   if (hits.length) {
-    hits.sort((a, b) => commandWeight(b) - commandWeight(a));
-    const hit = hits[0];
+    hits.sort((a, b) => commandWeight(COMMAND_BY_ID[b.cmdId]) - commandWeight(COMMAND_BY_ID[a.cmdId]));
+    const shadow = hits[0];
+    const hit = COMMAND_BY_ID[shadow.cmdId];
     recognized = {
       id: hit.id,
       notation: hit.notation,
       name: hit.name,
+      withPunch: !!shadow.withPunch,
       until: frame + 80,
     };
   } else if (recognized && frame > recognized.until) {
@@ -923,7 +972,17 @@ function pushHistory(dir, phys, frames) {
   if (frames <= 0) return;
   if (dir === 5 && !seenInput) return;
   history.push({ dir, phys, frames });
-  if (history.length > 40) history.shift();
+  if (history.length > 48) history.shift();
+}
+
+function noteAttack() {
+  seenInput = true;
+  if (open && open.frames > 0) {
+    history.push({ dir: open.dir, phys: open.phys, frames: open.frames });
+    open = { dir: open.dir, phys: open.phys, frames: 0 };
+  }
+  history.push({ attack: true });
+  if (history.length > 48) history.shift();
 }
 
 function noteDirection(dir, phys) {
@@ -943,7 +1002,7 @@ function noteDirection(dir, phys) {
 }
 
 function expectedNotation() {
-  if (mode !== "live" || !currentCmd || !attempt || attempt.result) return null;
+  if (mode !== "live" || !currentCmd || !attempt || attempt.result || attempt.phase === "punch") return null;
   if (currentCmd.kind === "motion") {
     if (attempt.progress >= currentCmd.seq.length) return null;
     return currentCmd.seq[attempt.progress];
@@ -969,9 +1028,10 @@ function recordResult(result) {
     stats.streak = 0;
   }
   const time = attempt.framesTaken ? `${attempt.framesTaken}F` : "";
+  const shown = `${currentCmd.notation}${attempt.withPunch ? "P" : ""}`;
   const text = result === "success"
-    ? `成功 ${currentCmd.notation} ${time}。${stats.streak}連続。`
-    : `失敗 ${currentCmd.notation}。${attempt.reason}`;
+    ? `成功 ${shown} ${time}。${stats.streak}連続。`
+    : `失敗 ${shown}。${attempt.reason}`;
   document.getElementById("announce").textContent = text;
   lastResult = {
     ok: result === "success",
@@ -1024,6 +1084,10 @@ function tick() {
   notation = resolved.notation;
   physical = resolved.physical;
   noteDirection(notation, physical);
+  punchHeld = punchIsDown();
+  punchEdge = punchHeld && !punchWas;
+  punchWas = punchHeld;
+  if (punchEdge) noteAttack();
   rememberPadButtons();
   renderPadLive();
   renderPadStatus();
@@ -1044,8 +1108,20 @@ function tick() {
     stepShadows();
     return;
   }
-  const result = stepAttempt(attempt, notation, frame, settings);
+  const result = advanceAttempt(attempt, notation, frame, punchEdge);
   if (result) recordResult(result);
+}
+
+function punchIsDown() {
+  const code = settings.keys.punch;
+  if (code && keyDown.has(code)) return true;
+  if (pointerHeld.punch) return true;
+  const index = settings.padButtons.punch;
+  if (index == null) return false;
+  for (const pad of latestPads) {
+    if (pad.buttons?.[index]?.pressed) return true;
+  }
+  return false;
 }
 
 function rateText(ok, total) {
@@ -1092,6 +1168,7 @@ function renderBinds() {
   document.getElementById("guide").checked = settings.guide;
   document.getElementById("use-dpad").checked = settings.useDpad;
   document.getElementById("use-stick").checked = settings.useStick;
+  document.getElementById("require-attack").checked = settings.requireAttack;
 }
 
 function renderToggles() {
@@ -1128,7 +1205,7 @@ function renderPadLive() {
 function assignKey(dir, code) {
   if (!code || code === "Escape" || code === "Tab") return;
   const previous = settings.keys[dir];
-  for (const other of DIRS) {
+  for (const other of INPUTS) {
     if (other !== dir && settings.keys[other] === code) settings.keys[other] = previous;
   }
   settings.keys[dir] = code;
@@ -1136,7 +1213,7 @@ function assignKey(dir, code) {
 }
 
 function assignPad(dir, index) {
-  for (const other of DIRS) {
+  for (const other of INPUTS) {
     if (other !== dir && settings.padButtons[other] === index) settings.padButtons[other] = null;
   }
   settings.padButtons[dir] = index;
@@ -1152,7 +1229,7 @@ function onKeyDown(event) {
     renderBinds();
     return;
   }
-  const dir = DIRS.find((name) => settings.keys[name] === event.code);
+  const dir = INPUTS.find((name) => settings.keys[name] === event.code);
   if (!dir) return;
   event.preventDefault();
   const active = document.activeElement;
@@ -1171,13 +1248,14 @@ function onKeyUp(event) {
 function clearTransientHolds() {
   keyDown.clear();
   pointers.clear();
-  for (const dir of DIRS) pointerHeld[dir] = false;
+  for (const dir of INPUTS) pointerHeld[dir] = false;
+  punchWas = false;
 }
 
 function dirAtPoint(x, y) {
   let best = null;
   let bestDistance = Infinity;
-  for (const dir of DIRS) {
+  for (const dir of INPUTS) {
     const rect = buttonRects[dir];
     if (!rect) continue;
     const radius = rect.w / 2 + 6;
@@ -1198,11 +1276,11 @@ function pointOf(event) {
 }
 
 function refreshPointers() {
-  const next = emptyHolds();
+  const next = { ...emptyHolds(), punch: false };
   for (const dir of pointers.values()) if (dir) next[dir] = true;
-  for (const dir of DIRS) {
-    if (next[dir] && !pointerHeld[dir]) engage(dir);
-    pointerHeld[dir] = next[dir];
+  for (const dir of INPUTS) {
+    if (next[dir] && !pointerHeld[dir] && dir !== "punch") engage(dir);
+    pointerHeld[dir] = !!next[dir];
   }
 }
 
@@ -1254,12 +1332,12 @@ function recipeSteps() {
   const failed = attempt.result === "fail";
   const success = attempt.result === "success";
   if (cmd.kind === "motion" || cmd.kind === "double") {
-    return cmd.seq.map((num, index) => {
+    return withPunchStep(cmd.seq.map((num, index) => {
       let state = "todo";
       if (cmd.kind === "motion") {
-        if (success || index < attempt.progress) state = "done";
+        if (success || attempt.phase === "punch" || index < attempt.progress) state = "done";
         else if (index === attempt.progress) state = failed ? "bad" : "now";
-      } else if (success) {
+      } else if (success || attempt.phase === "punch") {
         state = "done";
       } else if (attempt.phase === "wait") {
         state = index === 0 ? "now" : "todo";
@@ -1270,32 +1348,44 @@ function recipeSteps() {
       }
       const phys = notationToPhysical(num, side);
       return { label: `${num} ${ARROW[phys]}`, state };
-    });
+    }));
   }
   if (cmd.kind === "charge") {
-    const charged = success || attempt.charge >= settings.charge;
+    const released = success || attempt.phase === "punch";
+    const charged = released || attempt.charge >= settings.charge;
     const holdPhys = notationToPhysical(cmd.hold, side);
     const releasePhys = notationToPhysical(cmd.release, side);
-    return [
+    return withPunchStep([
       { label: `${cmd.hold} ${ARROW[holdPhys]}`, state: charged ? "done" : (failed ? "bad" : "now") },
-      { label: `${cmd.release} ${ARROW[releasePhys]}`, state: success ? "done" : (charged ? "now" : "todo") },
-    ];
+      { label: `${cmd.release} ${ARROW[releasePhys]}`, state: released ? "done" : (charged ? "now" : "todo") },
+    ]);
   }
   const order = attempt.sign < 0 ? [4, 2, 6, 8] : [6, 2, 4, 8];
-  return order.map((num) => {
+  return withPunchStep(order.map((num) => {
     const bit = CARDINAL_BIT[num];
     const hit = (attempt.cardinals & bit) !== 0;
     const phys = notationToPhysical(num, side);
-    return { label: `${num} ${ARROW[phys]}`, state: hit ? "done" : "todo" };
-  });
+    return { label: `${num} ${ARROW[phys]}`, state: hit || attempt.phase === "punch" || success ? "done" : "todo" };
+  }));
+}
+
+function withPunchStep(steps) {
+  if (!settings.requireAttack || !attempt) return steps;
+  let state = "todo";
+  if (attempt.result === "success") state = "done";
+  else if (attempt.phase === "punch") state = "now";
+  else if (attempt.result === "fail" && attempt.reason === "ボタンが遅い") state = "bad";
+  steps.push({ label: "P", state });
+  return steps;
 }
 
 function buttonMetrics(w) {
-  const margin = 16;
-  let gap = 12;
-  let diameter = clamp((w - margin * 2 - gap * 3) / 4, 72, 108);
-  gap = clamp(diameter * 0.14, 10, 18);
-  diameter = clamp((w - margin * 2 - gap * 3) / 4, 68, 108);
+  const margin = w < 460 ? 10 : 16;
+  const count = 5;
+  let gap = 8;
+  let diameter = clamp((w - margin * 2 - gap * (count - 1)) / count, 60, 100);
+  gap = clamp(diameter * 0.12, 6, 14);
+  diameter = clamp((w - margin * 2 - gap * (count - 1)) / count, 58, 100);
   const downLift = Math.round(diameter * 0.2);
   const upDrop = Math.round(diameter * 0.16);
   const bandH = diameter + downLift + upDrop + 16;
@@ -1307,7 +1397,7 @@ function layoutOf(w, h) {
   const buttons = buttonMetrics(w);
   const margin = phone ? 14 : 22;
   const s = phone ? clamp(w / 390, 0.92, 1.15) : clamp(Math.min(w / 920, h / 680), 0.75, 1.15);
-  const cardY = phone ? 54 : 58;
+  const cardY = phone ? 62 : 58;
   let cardH = phone
     ? (!currentCmd ? 148 : currentCmd.kind === "charge" ? 178 : 156)
     : Math.max(150, 172 * s);
@@ -1371,7 +1461,10 @@ function drawTarget(box) {
     fillText("判定なし", left, cursor, Math.round(14 * s), C.muted, "left", 700);
     if (recognized && frame <= recognized.until) {
       cursor += 28 * s;
-      const found = recognized.name ? `${recognized.notation} ${recognized.name}` : recognized.notation;
+      const punchMark = recognized.withPunch ? "P" : "";
+      const found = recognized.name
+        ? `${recognized.notation}${punchMark} ${recognized.name}`
+        : `${recognized.notation}${punchMark}`;
       fillText(found, left, cursor, Math.round(18 * s), C.green, "left", 800);
     }
     return;
@@ -1428,38 +1521,45 @@ function drawTarget(box) {
 function drawHitbox(box) {
   const { w, h, s, buttons } = box;
   const { diameter, gap, downLift, upDrop, margin } = buttons;
-  const total = diameter * 4 + gap * 3;
+  const total = diameter * 5 + gap * 4;
   const startX = Math.max(margin, (w - total) / 2);
   const baseY = h - diameter - upDrop - 12;
+  const step = diameter + gap;
   const spots = [
-    { dir: "left", x: startX, y: baseY },
-    { dir: "down", x: startX + (diameter + gap), y: baseY - downLift },
-    { dir: "right", x: startX + (diameter + gap) * 2, y: baseY },
-    { dir: "up", x: startX + (diameter + gap) * 3, y: baseY + upDrop },
+    { dir: "left", x: startX, y: baseY, attack: false },
+    { dir: "down", x: startX + step, y: baseY - downLift, attack: false },
+    { dir: "right", x: startX + step * 2, y: baseY, attack: false },
+    { dir: "up", x: startX + step * 3, y: baseY + upDrop, attack: false },
+    { dir: "punch", x: startX + step * 4, y: baseY, attack: true },
   ];
   const expect = settings.guide && mode === "live" ? expectedNotation() : null;
   const guide = new Set(expect ? physicalToDirs(notationToPhysical(expect, settings.side)) : []);
+  const wantPunch = settings.guide && settings.requireAttack && mode === "live" && attempt && attempt.phase === "punch";
   for (const spot of spots) {
-    const pressed = !!holds[spot.dir];
+    const pressed = spot.attack ? punchHeld : !!holds[spot.dir];
     const radius = diameter / 2;
     const cx = spot.x + radius;
     const cy = spot.y + radius;
     buttonRects[spot.dir] = { x: spot.x, y: spot.y, w: diameter, h: diameter };
     ctx.beginPath();
     ctx.arc(cx, cy, radius, 0, Math.PI * 2);
-    ctx.fillStyle = pressed ? C.blue : "#2a3146";
+    if (spot.attack) ctx.fillStyle = pressed ? C.attackHot : C.attack;
+    else ctx.fillStyle = pressed ? C.blue : "#2a3146";
     ctx.fill();
-    ctx.lineWidth = guide.has(spot.dir) && !pressed ? 4 : 2;
-    ctx.strokeStyle = guide.has(spot.dir) && !pressed ? C.gold : "rgba(255,255,255,0.08)";
+    const hinted = spot.attack ? wantPunch && !pressed : guide.has(spot.dir) && !pressed;
+    ctx.lineWidth = hinted ? 4 : 2;
+    ctx.strokeStyle = hinted ? C.gold : "rgba(255,255,255,0.14)";
     ctx.stroke();
     if (pressed) {
       ctx.beginPath();
       ctx.arc(cx, cy, radius * 0.72, 0, Math.PI * 2);
-      ctx.fillStyle = "rgba(255,255,255,0.14)";
+      ctx.fillStyle = "rgba(255,255,255,0.16)";
       ctx.fill();
     }
-    fillText(DIR_LABEL[spot.dir], cx, cy - radius * 0.12, Math.round(Math.max(18, diameter * 0.28)), "#fff", "center", 800);
-    fillText(keyLabel(settings.keys[spot.dir]), cx, cy + radius * 0.34, Math.round(Math.max(11, diameter * 0.16) * Math.min(s, 1.1)), pressed ? "#d7e6ff" : C.dim, "center", 700);
+    const main = spot.attack ? "P" : DIR_LABEL[spot.dir];
+    const sub = spot.attack ? "パンチ" : keyLabel(settings.keys[spot.dir]);
+    fillText(main, cx, cy - radius * 0.16, Math.round(Math.max(16, diameter * 0.3)), "#fff", "center", 800);
+    fillText(sub, cx, cy + radius * 0.32, Math.round(Math.max(10, diameter * 0.15)), pressed ? "#ffe4e0" : "rgba(255,255,255,0.78)", "center", 700);
   }
 }
 
@@ -1495,13 +1595,26 @@ function drawHistory(box) {
   fillText("入力履歴", margin + 16, historyY + 16, 12, C.dim, "left", 700);
   fillText(box.phone ? "継続フレーム" : "数字は継続フレーム", w - margin - 16, historyY + 16, 12, C.dim, "right", 700);
   const items = history.slice(-18);
-  if (open) items.push({ ...open, live: true });
+  if (open && open.frames > 0) items.push({ ...open, live: true });
   const baseY = historyY + historyH * 0.62;
   let cursor = w - margin - 18;
   const gap = 8;
   const digitSize = Math.round(12 * s);
   for (let i = items.length - 1; i >= 0; i -= 1) {
     const item = items[i];
+    if (item.attack) {
+      const wide = 42;
+      cursor -= wide;
+      if (cursor < margin + 16) break;
+      const cy = baseY - 4 * s;
+      ctx.beginPath();
+      ctx.arc(cursor + 16, cy, 16, 0, Math.PI * 2);
+      ctx.fillStyle = C.attack;
+      ctx.fill();
+      fillText("P", cursor + 16, cy, 14, "#fff", "center", 800);
+      cursor -= gap;
+      continue;
+    }
     const neutral = item.dir === 5;
     const arrow = ARROW[item.phys] || ARROW[item.dir];
     const main = neutral ? "5" : `${item.dir}${arrow}`;
@@ -1561,8 +1674,9 @@ function drawStats(box) {
   const rate = rateText(stats.ok, stats.total);
   const detail = `${stats.ok}/${stats.total}  連続 ${stats.streak}  最高 ${stats.best}`;
   if (phone) {
-    fillText(`成功率 ${rate}`, margin, 22, 14, C.text, "left", 800);
-    fillText(detail, margin, 40, 12, C.dim, "left", 700);
+    fillText(`版 ${APP_VERSION}`, margin, 12, 11, C.dim, "left", 800);
+    fillText(`成功率 ${rate}`, margin, 28, 14, C.text, "left", 800);
+    fillText(detail, margin, 46, 12, C.dim, "left", 700);
     return;
   }
   fillText(`成功率 ${rate}`, w - 22, 28, Math.round(15 * s), C.text, "right", 800);
@@ -1582,7 +1696,7 @@ function render() {
   }
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   const box = layoutOf(cssW, cssH);
-  for (const dir of DIRS) buttonRects[dir] = null;
+  for (const dir of INPUTS) buttonRects[dir] = null;
   drawBackground(cssW, cssH);
   drawStats(box);
   drawTarget(box);
@@ -1680,10 +1794,15 @@ function bindControls() {
     settings.useStick = event.target.checked;
     saveSettings();
   });
+  document.getElementById("require-attack").addEventListener("change", (event) => {
+    settings.requireAttack = event.target.checked;
+    saveSettings();
+    if (mode === "live" && attempt && !attempt.result) armOrStart(currentCmd);
+  });
 
   const keyBinds = document.getElementById("key-binds");
   const padBinds = document.getElementById("pad-binds");
-  for (const dir of DIRS) {
+  for (const dir of INPUTS) {
     const keyButton = document.createElement("button");
     keyButton.type = "button";
     keyButton.dataset.key = dir;
@@ -1708,7 +1827,7 @@ function bindControls() {
     renderBinds();
   });
   document.getElementById("clear-pad").addEventListener("click", () => {
-    settings.padButtons = { left: null, down: null, right: null, up: null };
+    settings.padButtons = { left: null, down: null, right: null, up: null, punch: null };
     capture = null;
     saveSettings();
     renderBinds();
@@ -1817,7 +1936,8 @@ window.__trainer = {
       open: open ? { ...open } : null,
       lastResult: lastResult ? { ...lastResult } : null,
       command: currentCmd ? currentCmd.id : null,
-      recognized: recognized ? { notation: recognized.notation, name: recognized.name } : null,
+      recognized: recognized ? { notation: recognized.notation, name: recognized.name, withPunch: !!recognized.withPunch } : null,
+      punch: punchHeld,
       side: settings.side,
       rects: { ...buttonRects },
     };

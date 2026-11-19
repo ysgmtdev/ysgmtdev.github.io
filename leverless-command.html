@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="theme-color" content="#141822">
 <title>コマンド練習</title>
 <style>
@@ -12,23 +12,57 @@
     height: 100%;
     background: #141822;
     color: #e7ebf5;
+    overflow: hidden;
+    overscroll-behavior: none;
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+    -webkit-text-size-adjust: 100%;
     font-family: "Noto Sans CJK JP", "Hiragino Sans", "Yu Gothic UI", "Yu Gothic", "Meiryo", "WenQuanYi Micro Hei", "Droid Sans Fallback", sans-serif;
   }
-  body { overflow: hidden; }
   button, select, input { font: inherit; color: inherit; }
-  button { cursor: pointer; }
+  button { cursor: pointer; touch-action: manipulation; }
   #app {
     display: grid;
     grid-template-columns: minmax(0, 1fr) 400px;
     height: 100%;
+    height: 100dvh;
+    overflow: hidden;
   }
-  #stage { min-width: 0; min-height: 0; position: relative; }
+  #stage {
+    min-width: 0;
+    min-height: 0;
+    position: relative;
+    padding:
+      env(safe-area-inset-top)
+      env(safe-area-inset-right)
+      env(safe-area-inset-bottom)
+      env(safe-area-inset-left);
+    box-sizing: border-box;
+    touch-action: none;
+  }
   canvas {
     width: 100%;
     height: 100%;
     display: block;
     touch-action: none;
     background: #141822;
+  }
+  #settings-open, #settings-close {
+    display: none;
+    border: 0;
+    border-radius: 12px;
+    background: #2c3348;
+    font-weight: 800;
+  }
+  #settings-open {
+    position: fixed;
+    z-index: 4;
+    top: max(10px, env(safe-area-inset-top));
+    right: max(12px, env(safe-area-inset-right));
+    height: 40px;
+    padding: 0 14px;
   }
   aside {
     box-sizing: border-box;
@@ -37,6 +71,14 @@
     padding: 22px 18px 32px;
     background: #1c2230;
     border-left: 1px solid rgba(255, 255, 255, 0.06);
+    touch-action: pan-y;
+    -webkit-overflow-scrolling: touch;
+  }
+  .aside-tools {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
   }
   .back {
     margin: 0 0 10px;
@@ -162,26 +204,45 @@
     clip: rect(0, 0, 0, 0);
     border: 0;
   }
-  @media (max-width: 980px) {
-    body { overflow: auto; }
-    #app {
-      grid-template-columns: 1fr;
-      grid-template-rows: minmax(560px, 72vh) auto;
-      height: auto;
-    }
+  @media (max-width: 800px) {
+    #app { grid-template-columns: 1fr; }
+    #settings-open { display: block; }
+    #settings-close { display: inline-flex; align-items: center; height: 36px; padding: 0 12px; }
     aside {
-      max-height: none;
+      position: fixed;
+      inset: 0;
+      z-index: 6;
+      width: auto;
+      max-height: 100dvh;
       border-left: 0;
-      border-top: 1px solid rgba(255, 255, 255, 0.06);
+      transform: translateX(100%);
+      visibility: hidden;
+      pointer-events: none;
+      padding-top: max(18px, env(safe-area-inset-top));
+      padding-bottom: max(28px, env(safe-area-inset-bottom));
     }
+    aside.open {
+      transform: none;
+      visibility: visible;
+      pointer-events: auto;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    aside { transition: none; }
   }
 </style>
 </head>
 <body>
   <div id="app">
-    <div id="stage"><canvas id="view" width="960" height="640" aria-hidden="true"></canvas></div>
-    <aside>
-      <p class="back"><a href="index.html">一覧へ</a></p>
+    <div id="stage">
+      <canvas id="view" width="390" height="844" aria-hidden="true"></canvas>
+      <button type="button" id="settings-open">設定</button>
+    </div>
+    <aside id="settings">
+      <div class="aside-tools">
+        <p class="back"><a href="index.html">一覧へ</a></p>
+        <button type="button" id="settings-close">閉じる</button>
+      </div>
       <h1>コマンド練習</h1>
       <p class="lead">レバーレス（ヒットボックス）の方向入力です。判定は60fpsで、60Fが1秒です。</p>
 
@@ -987,12 +1048,21 @@ function clearTransientHolds() {
 }
 
 function dirAtPoint(x, y) {
+  let best = null;
+  let bestDistance = Infinity;
   for (const dir of DIRS) {
     const rect = buttonRects[dir];
     if (!rect) continue;
-    if (x >= rect.x && x < rect.x + rect.w && y >= rect.y && y < rect.y + rect.h) return dir;
+    const radius = rect.w / 2 + 6;
+    const dx = x - (rect.x + rect.w / 2);
+    const dy = y - (rect.y + rect.h / 2);
+    const distance = Math.hypot(dx, dy);
+    if (distance <= radius && distance < bestDistance) {
+      best = dir;
+      bestDistance = distance;
+    }
   }
-  return null;
+  return best;
 }
 
 function pointOf(event) {
@@ -1093,16 +1163,44 @@ function recipeSteps() {
   });
 }
 
+function buttonMetrics(w) {
+  const margin = 16;
+  let gap = 12;
+  let diameter = clamp((w - margin * 2 - gap * 3) / 4, 72, 108);
+  gap = clamp(diameter * 0.14, 10, 18);
+  diameter = clamp((w - margin * 2 - gap * 3) / 4, 68, 108);
+  const downLift = Math.round(diameter * 0.2);
+  const upDrop = Math.round(diameter * 0.16);
+  const bandH = diameter + downLift + upDrop + 16;
+  return { diameter, gap, downLift, upDrop, bandH, margin };
+}
+
 function layoutOf(w, h) {
-  const s = clamp(Math.min(w / 920, h / 680), 0.72, 1.2);
-  const margin = 22;
-  const cardY = 58;
-  const cardH = Math.max(148, 176 * s);
-  const historyH = Math.max(104, 120 * s);
-  const historyY = h - historyH - 16;
-  const midY = cardY + cardH + 14;
-  const midH = Math.max(120, historyY - midY - 8);
-  return { w, h, s, margin, cardY, cardH, midY, midH, historyY, historyH };
+  const phone = w < 800;
+  const buttons = buttonMetrics(w);
+  const margin = phone ? 14 : 22;
+  const s = phone ? clamp(w / 390, 0.92, 1.15) : clamp(Math.min(w / 920, h / 680), 0.75, 1.15);
+  const cardY = phone ? 54 : 58;
+  let cardH = phone ? (currentCmd && currentCmd.kind === "charge" ? 178 : 156) : Math.max(150, 172 * s);
+  let historyH = phone ? 96 : Math.max(104, 116 * s);
+  const bottomPad = 10;
+  let historyY = h - buttons.bandH - bottomPad - historyH - 8;
+  for (let i = 0; i < 4; i += 1) {
+    historyY = h - buttons.bandH - bottomPad - historyH - 8;
+    const cardBottom = cardY + cardH;
+    if (historyY >= cardBottom + 6) break;
+    const overflow = cardBottom + 6 - historyY;
+    cardH = Math.max(112, cardH - Math.ceil(overflow * 0.55));
+    historyH = Math.max(68, historyH - Math.ceil(overflow * 0.45));
+  }
+  historyY = h - buttons.bandH - bottomPad - historyH - 8;
+  const buttonsTop = historyY + historyH + 8;
+  const midY = cardY + cardH;
+  const midH = Math.max(0, historyY - midY);
+  return {
+    w, h, s, margin, phone, cardY, cardH, midY, midH,
+    historyY, historyH, buttons, buttonsTop,
+  };
 }
 
 function drawBackground(w, h) {
@@ -1183,71 +1281,66 @@ function drawTarget(box) {
   }
 }
 
-function drawNumpad(x, y, cell, gap) {
-  const nums = [
-    [7, 8, 9],
-    [4, 5, 6],
-    [1, 2, 3],
-  ];
-  const expect = settings.guide ? expectedNotation() : null;
-  for (let row = 0; row < 3; row += 1) {
-    for (let col = 0; col < 3; col += 1) {
-      const num = nums[row][col];
-      const px = x + col * (cell + gap);
-      const py = y + row * (cell + gap);
-      roundRect(px, py, cell, cell, 12);
-      const active = notation === num;
-      if (active && num !== 5) ctx.fillStyle = C.blue;
-      else if (active) ctx.fillStyle = "#343c52";
-      else ctx.fillStyle = "#1a2030";
-      ctx.fill();
-      if (expect === num && !active) {
-        ctx.strokeStyle = C.gold;
-        ctx.lineWidth = 3;
-        ctx.stroke();
-      } else if (active) {
-        ctx.strokeStyle = "rgba(255,255,255,0.18)";
-        ctx.lineWidth = 2;
-        ctx.stroke();
-      }
-      fillText(String(num), px + cell / 2, py + cell / 2 + 1, Math.round(cell * 0.42), active ? "#fff" : C.muted, "center", 800);
-    }
-  }
-}
-
-function drawHitbox(x, y, bw, bh, gap, s) {
+function drawHitbox(box) {
+  const { w, h, s, buttons } = box;
+  const { diameter, gap, downLift, upDrop, margin } = buttons;
+  const total = diameter * 4 + gap * 3;
+  const startX = Math.max(margin, (w - total) / 2);
+  const baseY = h - diameter - upDrop - 12;
   const spots = [
-    { dir: "up", col: 0, row: 0 },
-    { dir: "left", col: 0, row: 1 },
-    { dir: "down", col: 1, row: 1 },
-    { dir: "right", col: 2, row: 1 },
+    { dir: "left", x: startX, y: baseY },
+    { dir: "down", x: startX + (diameter + gap), y: baseY - downLift },
+    { dir: "right", x: startX + (diameter + gap) * 2, y: baseY },
+    { dir: "up", x: startX + (diameter + gap) * 3, y: baseY + upDrop },
   ];
   const expect = settings.guide && mode === "live" ? expectedNotation() : null;
   const guide = new Set(expect ? physicalToDirs(notationToPhysical(expect, settings.side)) : []);
   for (const spot of spots) {
-    const px = x + spot.col * (bw + gap);
-    const py = y + spot.row * (bh + gap);
-    const down = !!holds[spot.dir];
-    buttonRects[spot.dir] = { x: px, y: py, w: bw, h: bh };
-    roundRect(px, py + (down ? 3 : 0), bw, bh - (down ? 3 : 0), 16);
-    ctx.fillStyle = down ? C.blue : "#2a3146";
+    const pressed = !!holds[spot.dir];
+    const radius = diameter / 2;
+    const cx = spot.x + radius;
+    const cy = spot.y + radius;
+    buttonRects[spot.dir] = { x: spot.x, y: spot.y, w: diameter, h: diameter };
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+    ctx.fillStyle = pressed ? C.blue : "#2a3146";
     ctx.fill();
-    if (guide.has(spot.dir) && !down) {
-      ctx.strokeStyle = C.gold;
-      ctx.lineWidth = 3;
-      ctx.stroke();
+    ctx.lineWidth = guide.has(spot.dir) && !pressed ? 4 : 2;
+    ctx.strokeStyle = guide.has(spot.dir) && !pressed ? C.gold : "rgba(255,255,255,0.08)";
+    ctx.stroke();
+    if (pressed) {
+      ctx.beginPath();
+      ctx.arc(cx, cy, radius * 0.72, 0, Math.PI * 2);
+      ctx.fillStyle = "rgba(255,255,255,0.14)";
+      ctx.fill();
     }
-    fillText(DIR_LABEL[spot.dir], px + bw / 2, py + bh * 0.4 + (down ? 3 : 0), Math.round(18 * s), "#fff", "center", 800);
-    fillText(keyLabel(settings.keys[spot.dir]), px + bw / 2, py + bh * 0.72 + (down ? 2 : 0), Math.round(11 * s), down ? "#d7e6ff" : C.dim, "center", 700);
+    fillText(DIR_LABEL[spot.dir], cx, cy - radius * 0.12, Math.round(Math.max(18, diameter * 0.28)), "#fff", "center", 800);
+    fillText(keyLabel(settings.keys[spot.dir]), cx, cy + radius * 0.34, Math.round(Math.max(11, diameter * 0.16) * Math.min(s, 1.1)), pressed ? "#d7e6ff" : C.dim, "center", 700);
   }
 }
 
-function drawReadout(x, y, s) {
-  fillText("解決", x, y, Math.round(12 * s), C.dim, "left", 700);
+function drawReadout(box) {
+  const top = box.cardY + box.cardH + 4;
+  const bottom = box.historyY - 4;
+  if (bottom - top < 64) return;
+  const cy = (top + bottom) / 2 - 6;
+  const cx = box.w / 2;
+  const numSize = Math.round(clamp(bottom - top, 64, box.phone ? 120 : 150) * 0.62);
   const color = notation === 5 ? C.dim : C.text;
-  fillText(String(notation), x, y + 48 * s, Math.round(72 * s), color, "left", 800);
-  fillText(ARROW[physical], x + 78 * s, y + 46 * s, Math.round(42 * s), notation === 5 ? C.dim : C.gold, "left", 700);
-  fillText(REL_NAME[notation], x, y + 96 * s, Math.round(16 * s), C.muted, "left", 700);
+  const num = String(notation);
+  const arrow = ARROW[physical];
+  ctx.font = `800 ${numSize}px ${FONT}`;
+  const numW = ctx.measureText(num).width;
+  const arrowSize = Math.round(numSize * 0.46);
+  ctx.font = `700 ${arrowSize}px ${FONT}`;
+  const arrowW = ctx.measureText(arrow).width;
+  const gap = 12;
+  const total = numW + gap + arrowW;
+  const numX = cx - total / 2 + numW / 2;
+  const arrowX = cx - total / 2 + numW + gap + arrowW / 2;
+  fillText(num, numX, cy, numSize, color, "center", 800);
+  fillText(arrow, arrowX, cy - 2, arrowSize, notation === 5 ? C.dim : C.gold, "center", 700);
+  fillText(REL_NAME[notation], cx, cy + numSize * 0.46, Math.round(box.phone ? 15 : 18), C.muted, "center", 700);
 }
 
 function drawHistory(box) {
@@ -1255,8 +1348,8 @@ function drawHistory(box) {
   roundRect(margin, historyY, w - margin * 2, historyH, 18);
   ctx.fillStyle = "rgba(28, 34, 48, 0.92)";
   ctx.fill();
-  fillText("入力履歴", margin + 18, historyY + 18 * s, Math.round(12 * s), C.dim, "left", 700);
-  fillText("数字は継続フレーム", w - margin - 18, historyY + 18 * s, Math.round(12 * s), C.dim, "right", 700);
+  fillText("入力履歴", margin + 16, historyY + 16, 12, C.dim, "left", 700);
+  fillText(box.phone ? "継続フレーム" : "数字は継続フレーム", w - margin - 16, historyY + 16, 12, C.dim, "right", 700);
   const items = history.slice(-18);
   if (open) items.push({ ...open, live: true });
   const baseY = historyY + historyH * 0.62;
@@ -1285,23 +1378,23 @@ function drawHistory(box) {
   }
 }
 
-function drawBanner(box, contentBottom) {
+function drawBanner(box) {
+  const top = box.cardY + box.cardH + 8;
+  const bottom = box.historyY - 8;
   if (!lastResult || mode === "live") {
     if (mode === "arm") {
-      const y = Math.min(box.historyY - 16, Math.max(contentBottom + 28, box.midY + box.midH - 18));
-      fillText("方向を離すと次の問題", box.w / 2, y, 14, C.gold, "center", 800);
+      fillText("方向を離すと次の問題", box.w / 2, Math.min(bottom, top + 24), 14, C.gold, "center", 800);
     }
     return;
   }
   const releaseHint = notation !== 5 && (mode === "arm" || mode === "cooldown");
-  const bw = Math.min(420, box.w - 64);
-  const bh = lastResult.ok && releaseHint ? 128 : 108;
+  const bw = Math.min(420, box.w - 36);
+  const bh = lastResult.ok && releaseHint ? 124 : 104;
   const x = (box.w - bw) / 2;
-  let y = contentBottom + 18;
-  const maxY = box.historyY - bh - 10;
-  if (y > maxY) y = Math.max(box.midY + 4, maxY);
+  let y = top + Math.max(0, (bottom - top - bh) / 2);
+  if (y + bh > bottom) y = Math.max(top, bottom - bh);
   roundRect(x, y, bw, bh, 18);
-  ctx.fillStyle = lastResult.ok ? "rgba(18, 48, 34, 0.94)" : "rgba(58, 24, 24, 0.94)";
+  ctx.fillStyle = lastResult.ok ? "#123226" : "#3a1c1c";
   ctx.fill();
   ctx.strokeStyle = lastResult.ok ? C.green : C.red;
   ctx.lineWidth = 2;
@@ -1320,11 +1413,16 @@ function drawBanner(box, contentBottom) {
 }
 
 function drawStats(box) {
-  const { w, s } = box;
+  const { w, s, phone, margin } = box;
   const rate = rateText(stats.ok, stats.total);
+  const detail = `${stats.ok}/${stats.total}  連続 ${stats.streak}  最高 ${stats.best}`;
+  if (phone) {
+    fillText(`成功率 ${rate}`, margin, 22, 14, C.text, "left", 800);
+    fillText(detail, margin, 40, 12, C.dim, "left", 700);
+    return;
+  }
   fillText(`成功率 ${rate}`, w - 22, 28, Math.round(15 * s), C.text, "right", 800);
-  fillText(`${stats.ok}/${stats.total}  連続 ${stats.streak}  最高 ${stats.best}`, w - 22, 48, Math.round(12 * s), C.dim, "right", 700);
-  fillText("テンキーはキャラ向き", 22, 28, Math.round(13 * s), C.dim, "left", 700);
+  fillText(detail, w - 22, 48, Math.round(12 * s), C.dim, "right", 700);
 }
 
 function render() {
@@ -1344,38 +1442,10 @@ function render() {
   drawBackground(cssW, cssH);
   drawStats(box);
   drawTarget(box);
-  const avail = cssW - box.margin * 2;
-  let cell = clamp(74 * box.s, 40, 84);
-  let bwBtn = clamp(66 * box.s, 54, 86);
-  const gap = 8;
-  const measure = () => {
-    const grid = cell * 3 + gap * 2;
-    const hitW = bwBtn * 3 + gap * 2;
-    const readW = 148 * box.s;
-    return { grid, hitW, hitH: bwBtn * 2 + gap, readW, cluster: grid + readW + hitW + 56 };
-  };
-  let parts = measure();
-  while (parts.cluster > avail && cell > 38) {
-    cell -= 4;
-    bwBtn = Math.max(52, bwBtn - 3);
-    parts = measure();
-  }
-  const stacked = parts.cluster > avail;
-  const gridX = stacked
-    ? box.margin
-    : box.margin + Math.max(0, (avail - parts.cluster) / 2);
-  const gridY = box.midY + 8;
-  drawNumpad(gridX, gridY, cell, gap);
-  const readX = gridX + parts.grid + 24;
-  drawReadout(readX, gridY + 4, box.s);
-  const hitX = stacked
-    ? box.margin + Math.max(0, (avail - parts.hitW) / 2)
-    : readX + parts.readW + 8;
-  const hitY = stacked ? gridY + parts.grid + 16 : gridY + Math.max(0, (parts.grid - parts.hitH) / 2);
-  drawHitbox(hitX, hitY, bwBtn, bwBtn, gap, box.s);
-  const contentBottom = Math.max(gridY + parts.grid, hitY + parts.hitH);
+  drawReadout(box);
   drawHistory(box);
-  drawBanner(box, contentBottom);
+  drawBanner(box);
+  drawHitbox(box);
 }
 
 function loop(now) {
@@ -1506,6 +1576,13 @@ function bindControls() {
   });
   renderBinds();
   renderStats();
+  const settingsPanel = document.getElementById("settings");
+  document.getElementById("settings-open").addEventListener("click", () => {
+    settingsPanel.classList.add("open");
+  });
+  document.getElementById("settings-close").addEventListener("click", () => {
+    settingsPanel.classList.remove("open");
+  });
 }
 
 window.addEventListener("keydown", onKeyDown);
@@ -1522,6 +1599,24 @@ window.addEventListener("pointerup", onPointerUp);
 window.addEventListener("pointercancel", onPointerUp);
 canvas.addEventListener("contextmenu", (event) => event.preventDefault());
 window.addEventListener("resize", render);
+
+function touchOnSettings(target) {
+  const panel = document.getElementById("settings");
+  return !!(panel && panel.classList.contains("open") && panel.contains(target));
+}
+
+document.addEventListener("touchstart", (event) => {
+  const target = event.target;
+  if (touchOnSettings(target)) return;
+  if (target.closest && target.closest("button, a, input, select, label, summary")) return;
+  event.preventDefault();
+}, { passive: false });
+document.addEventListener("touchmove", (event) => {
+  if (touchOnSettings(event.target)) return;
+  event.preventDefault();
+}, { passive: false });
+window.addEventListener("gesturestart", (event) => event.preventDefault());
+window.addEventListener("gesturechange", (event) => event.preventDefault());
 
 if (settings.command === "random") currentCmd = pickCommand();
 else currentCmd = COMMAND_BY_ID[settings.command] || COMMANDS[0];

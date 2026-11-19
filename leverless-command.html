@@ -1,0 +1,1569 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#141822">
+<title>コマンド練習</title>
+<style>
+  :root { color-scheme: dark; }
+  html, body {
+    margin: 0;
+    height: 100%;
+    background: #141822;
+    color: #e7ebf5;
+    font-family: "Noto Sans CJK JP", "Hiragino Sans", "Yu Gothic UI", "Yu Gothic", "Meiryo", "WenQuanYi Micro Hei", "Droid Sans Fallback", sans-serif;
+  }
+  body { overflow: hidden; }
+  button, select, input { font: inherit; color: inherit; }
+  button { cursor: pointer; }
+  #app {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 400px;
+    height: 100%;
+  }
+  #stage { min-width: 0; min-height: 0; position: relative; }
+  canvas {
+    width: 100%;
+    height: 100%;
+    display: block;
+    touch-action: none;
+    background: #141822;
+  }
+  aside {
+    box-sizing: border-box;
+    overflow: auto;
+    max-height: 100%;
+    padding: 22px 18px 32px;
+    background: #1c2230;
+    border-left: 1px solid rgba(255, 255, 255, 0.06);
+  }
+  .back {
+    margin: 0 0 10px;
+    font-size: 13px;
+    font-weight: 700;
+  }
+  .back a { color: #8cbcff; text-decoration: none; }
+  h1 {
+    margin: 0;
+    font-size: 26px;
+    letter-spacing: 0.04em;
+  }
+  h2 {
+    margin: 22px 0 8px;
+    font-size: 13px;
+    letter-spacing: 0.08em;
+    color: #b7c0d4;
+  }
+  .lead, .hint {
+    margin: 6px 0 0;
+    color: #8b95ab;
+    font-size: 12px;
+    line-height: 1.55;
+  }
+  .lead { color: #b7c0d4; font-size: 13px; margin-bottom: 16px; }
+  .field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-top: 14px;
+    font-size: 13px;
+    font-weight: 700;
+    color: #b7c0d4;
+  }
+  .field .val { color: #e7ebf5; font-weight: 800; }
+  select, .seg button, .bind-grid button, .actions button, #reset-keys, #clear-pad {
+    border: 0;
+    border-radius: 12px;
+    background: #2c3348;
+  }
+  select {
+    height: 42px;
+    padding: 0 12px;
+    font-weight: 800;
+    color: #e7ebf5;
+  }
+  input[type="range"] { width: 100%; accent-color: #8cbcff; }
+  .seg { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .seg button {
+    height: 40px;
+    font-weight: 800;
+  }
+  .seg button.on { background: #f3f5f8; color: #1a1d27; }
+  .check {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 12px;
+    font-size: 14px;
+    font-weight: 700;
+  }
+  .bind-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  .bind-grid button {
+    height: 48px;
+    text-align: left;
+    padding: 0 12px;
+    font-weight: 800;
+  }
+  .bind-grid button kbd {
+    float: right;
+    color: #ffd15a;
+    font-style: normal;
+    font-weight: 800;
+  }
+  .bind-grid button.wait { outline: 2px solid #ffd15a; }
+  #reset-keys, #clear-pad, .actions button {
+    width: 100%;
+    height: 40px;
+    margin-top: 8px;
+    font-weight: 800;
+  }
+  #pad-status, #pad-live {
+    margin: 0 0 8px;
+    font-size: 13px;
+    font-weight: 700;
+    color: #b7c0d4;
+  }
+  #pad-live { min-height: 1.2em; color: #8cbcff; }
+  #stats {
+    margin: 0;
+    font-size: 14px;
+    font-weight: 800;
+    line-height: 1.6;
+  }
+  #stats span { color: #b7c0d4; font-weight: 700; }
+  table.scores {
+    width: 100%;
+    margin-top: 8px;
+    border-collapse: collapse;
+    font-size: 12px;
+  }
+  table.scores th, table.scores td {
+    padding: 5px 4px;
+    text-align: right;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  }
+  table.scores th:first-child, table.scores td:first-child { text-align: left; }
+  table.scores th { color: #8b95ab; font-weight: 700; }
+  details { margin-top: 8px; }
+  details summary { cursor: pointer; color: #b7c0d4; font-size: 13px; font-weight: 700; }
+  .actions { display: flex; flex-direction: column; }
+  .sr {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    border: 0;
+  }
+  @media (max-width: 980px) {
+    body { overflow: auto; }
+    #app {
+      grid-template-columns: 1fr;
+      grid-template-rows: minmax(560px, 72vh) auto;
+      height: auto;
+    }
+    aside {
+      max-height: none;
+      border-left: 0;
+      border-top: 1px solid rgba(255, 255, 255, 0.06);
+    }
+  }
+</style>
+</head>
+<body>
+  <div id="app">
+    <div id="stage"><canvas id="view" width="960" height="640" aria-hidden="true"></canvas></div>
+    <aside>
+      <p class="back"><a href="index.html">一覧へ</a></p>
+      <h1>コマンド練習</h1>
+      <p class="lead">レバーレス（ヒットボックス）の方向入力です。判定は60fpsで、60Fが1秒です。</p>
+
+      <label class="field">コマンド
+        <select id="command"></select>
+      </label>
+
+      <div class="field">向き
+        <div class="seg" id="side">
+          <button type="button" data-side="right">右向き</button>
+          <button type="button" data-side="left">左向き</button>
+        </div>
+      </div>
+
+      <label class="field">許容 <span class="val" id="len-val">15F</span>
+        <input id="leniency" type="range" min="4" max="36" step="1" value="15">
+      </label>
+      <p class="hint">前の方向を離してから、次の方向を入れるまでの猶予です。同じ方向を押し続けているあいだは減りません。22 / 66 / 44 は1打目から2打目までのフレーム差です。</p>
+
+      <label class="field">溜め <span class="val" id="charge-val">45F</span>
+        <input id="charge" type="range" min="20" max="60" step="1" value="45">
+      </label>
+      <p class="hint">溜め方向をこのフレーム以上、続けて押します。斜めも溜めに入ります。SF6の溜めは45Fです。</p>
+
+      <label class="field">左右の同時押し
+        <select id="socd-h">
+          <option value="neutral">ニュートラル</option>
+          <option value="last">後入れ優先</option>
+          <option value="first">先入れ優先</option>
+        </select>
+      </label>
+      <label class="field">上下の同時押し
+        <select id="socd-v">
+          <option value="up">上優先</option>
+          <option value="neutral">ニュートラル</option>
+          <option value="down">下優先</option>
+          <option value="last">後入れ優先</option>
+          <option value="first">先入れ優先</option>
+        </select>
+      </label>
+      <p class="hint">初期値はレバーレスと同じです。左右同時はニュートラル、上下同時は上。溜め縦は下を押したまま上を足せます。</p>
+
+      <label class="check"><input id="guide" type="checkbox" checked> 次の入力をガイドする</label>
+
+      <h2>キーボード</h2>
+      <div class="bind-grid" id="key-binds"></div>
+      <button type="button" id="reset-keys">キーを初期化</button>
+      <p class="hint">初期値は A 左 / S 下 / D 右 / Space 上。枠を押してから、割り当てたいキーを押します。Escで取消。</p>
+
+      <h2>ゲームパッド</h2>
+      <p id="pad-status">未接続。ボタンを押すと認識します。</p>
+      <p id="pad-live"></p>
+      <label class="check"><input id="use-dpad" type="checkbox" checked> 方向パッドを使う</label>
+      <label class="check"><input id="use-stick" type="checkbox" checked> 左スティックを使う</label>
+      <div class="bind-grid" id="pad-binds"></div>
+      <button type="button" id="clear-pad">パッド割当をクリア</button>
+      <p class="hint">方向パッドと左スティックに加え、押したボタンを直接割り当てられます。ヒットボックスが別のボタン番号を出すときに使います。</p>
+
+      <h2>成績</h2>
+      <p id="announce" class="sr" aria-live="polite"></p>
+      <div id="stats"></div>
+      <details>
+        <summary>コマンド別</summary>
+        <table class="scores">
+          <thead><tr><th>コマンド</th><th>成功</th><th>試行</th><th>率</th></tr></thead>
+          <tbody id="by-cmd"></tbody>
+        </table>
+      </details>
+      <div class="actions">
+        <button type="button" id="skip">次の問題</button>
+        <button type="button" id="reset-stats">成績をリセット</button>
+      </div>
+    </aside>
+  </div>
+<script>
+"use strict";
+
+// 60F = 1秒。方向はフレーム頭で確定し、SOCDをかけてからテンキーに直す。
+// 左右同時の初期値はニュートラル、上下同時の初期値は上優先。
+// コマンドの数字はキャラの向き基準。左向きのときは左右だけを反転する。
+const FRAME_MS = 1000 / 60;
+const STORAGE_KEY = "leverless-command-settings-v1";
+const DIRS = ["left", "down", "right", "up"];
+const DIR_LABEL = { left: "左", down: "下", right: "右", up: "上" };
+const DEFAULT_KEYS = { left: "KeyA", down: "KeyS", right: "KeyD", up: "Space" };
+const ARROW = {
+  1: "↙", 2: "↓", 3: "↘",
+  4: "←", 5: "・", 6: "→",
+  7: "↖", 8: "↑", 9: "↗",
+};
+const REL_NAME = {
+  1: "後下", 2: "下", 3: "前下",
+  4: "後", 5: "ニュートラル", 6: "前",
+  7: "後上", 8: "上", 9: "前上",
+};
+const FLIP = { 1: 3, 3: 1, 4: 6, 6: 4, 7: 9, 9: 7 };
+const RING = [6, 3, 2, 1, 4, 7, 8, 9];
+const CARDINAL_BIT = { 2: 1, 4: 2, 6: 4, 8: 8 };
+const FONT = '"Noto Sans CJK JP", "Hiragino Sans", "Yu Gothic UI", "Yu Gothic", "Meiryo", "WenQuanYi Micro Hei", "Droid Sans Fallback", sans-serif';
+const PAD_BUTTON_NAMES = {
+  0: "A", 1: "B", 2: "X", 3: "Y",
+  4: "L1", 5: "R1", 6: "L2", 7: "R2",
+  8: "Select", 9: "Start", 10: "L3", 11: "R3",
+  12: "D↑", 13: "D↓", 14: "D←", 15: "D→",
+};
+
+const COMMANDS = [
+  { id: "236", notation: "236", name: "波動拳", kind: "motion", seq: [2, 3, 6] },
+  { id: "214", notation: "214", name: "竜巻", kind: "motion", seq: [2, 1, 4] },
+  { id: "623", notation: "623", name: "昇龍", kind: "motion", seq: [6, 2, 3] },
+  { id: "421", notation: "421", name: "逆昇龍", kind: "motion", seq: [4, 2, 1] },
+  { id: "41236", notation: "41236", name: "半回転", kind: "motion", seq: [4, 1, 2, 3, 6] },
+  { id: "63214", notation: "63214", name: "逆半回転", kind: "motion", seq: [6, 3, 2, 1, 4] },
+  { id: "22", notation: "22", name: "ダブルタップ", kind: "double", seq: [2, 2] },
+  { id: "66", notation: "66", name: "前ダッシュ", kind: "double", seq: [6, 6] },
+  { id: "44", notation: "44", name: "バックダッシュ", kind: "double", seq: [4, 4] },
+  { id: "360", notation: "360", name: "回転", kind: "circle" },
+  { id: "236236", notation: "236236", name: "SA", kind: "motion", seq: [2, 3, 6, 2, 3, 6] },
+  { id: "214214", notation: "214214", name: "SA", kind: "motion", seq: [2, 1, 4, 2, 1, 4] },
+  { id: "46", notation: "[4]6", name: "溜め横", kind: "charge", hold: 4, release: 6, chargeDirs: [4, 1, 7], releaseDirs: [6, 3, 9] },
+  { id: "28", notation: "[2]8", name: "溜め縦", kind: "charge", hold: 2, release: 8, chargeDirs: [1, 2, 3], releaseDirs: [7, 8, 9] },
+];
+const COMMAND_BY_ID = Object.fromEntries(COMMANDS.map((cmd) => [cmd.id, cmd]));
+
+const C = {
+  text: "#e7ebf5",
+  muted: "#b7c0d4",
+  dim: "#8b95ab",
+  line: "rgba(255,255,255,0.08)",
+  card: "#232838",
+  blue: "#3d74e0",
+  blueSoft: "#8cbcff",
+  green: "#3dff8a",
+  red: "#ff5a4e",
+  gold: "#ffd15a",
+  ink: "#141822",
+};
+
+const canvas = document.getElementById("view");
+const ctx = canvas.getContext("2d");
+
+function clamp(n, lo, hi) { return Math.max(lo, Math.min(hi, n)); }
+
+function defaultSettings() {
+  return {
+    keys: { ...DEFAULT_KEYS },
+    padButtons: { left: null, down: null, right: null, up: null },
+    useDpad: true,
+    useStick: true,
+    socdH: "neutral",
+    socdV: "up",
+    leniency: 15,
+    charge: 45,
+    command: "236",
+    side: "right",
+    guide: true,
+  };
+}
+
+function loadSettings() {
+  const settings = defaultSettings();
+  try {
+    const raw = JSON.parse(localStorage.getItem(STORAGE_KEY) || "null");
+    if (!raw || typeof raw !== "object") return settings;
+    for (const dir of DIRS) {
+      const code = raw.keys?.[dir];
+      if (typeof code === "string" && code !== "Escape" && code !== "Tab") settings.keys[dir] = code;
+      const button = raw.padButtons?.[dir];
+      if (Number.isInteger(button) && button >= 0 && button < 32) settings.padButtons[dir] = button;
+    }
+    if (["neutral", "last", "first"].includes(raw.socdH)) settings.socdH = raw.socdH;
+    if (["up", "neutral", "down", "last", "first"].includes(raw.socdV)) settings.socdV = raw.socdV;
+    if (typeof raw.leniency === "number") settings.leniency = clamp(Math.round(raw.leniency), 4, 36);
+    if (typeof raw.charge === "number") settings.charge = clamp(Math.round(raw.charge), 20, 60);
+    if (raw.command === "random" || COMMAND_BY_ID[raw.command]) settings.command = raw.command;
+    if (raw.side === "left" || raw.side === "right") settings.side = raw.side;
+    if (typeof raw.guide === "boolean") settings.guide = raw.guide;
+    if (typeof raw.useDpad === "boolean") settings.useDpad = raw.useDpad;
+    if (typeof raw.useStick === "boolean") settings.useStick = raw.useStick;
+  } catch (e) { /* 壊れた保存値は初期値 */ }
+  return settings;
+}
+
+const settings = loadSettings();
+
+function saveSettings() {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(settings)); } catch (e) { /* プライベートモードなど */ }
+}
+
+function commandLabel(cmd) {
+  return cmd.name ? `${cmd.notation} ${cmd.name}` : cmd.notation;
+}
+
+function toNumpad(h, v) {
+  const table = {
+    "1,1": 9, "0,1": 8, "-1,1": 7,
+    "1,0": 6, "0,0": 5, "-1,0": 4,
+    "1,-1": 3, "0,-1": 2, "-1,-1": 1,
+  };
+  return table[`${h},${v}`];
+}
+
+function resolveAxis(negHeld, posHeld, negStamp, posStamp, mode, axis) {
+  if (negHeld && posHeld) {
+    if (mode === "neutral") return 0;
+    if (mode === "last") return posStamp >= negStamp ? 1 : -1;
+    if (mode === "first") return negStamp <= posStamp ? -1 : 1;
+    if (axis === "v" && mode === "up") return 1;
+    if (axis === "v" && mode === "down") return -1;
+  }
+  if (posHeld) return 1;
+  if (negHeld) return -1;
+  return 0;
+}
+
+function resolveFromHolds(holds, stamps, socdH, socdV, side) {
+  const h = resolveAxis(!!holds.left, !!holds.right, stamps.left || 0, stamps.right || 0, socdH, "h");
+  const v = resolveAxis(!!holds.down, !!holds.up, stamps.down || 0, stamps.up || 0, socdV, "v");
+  const physical = toNumpad(h, v);
+  const notation = toNumpad(side === "left" ? -h : h, v);
+  return { h, v, physical, notation };
+}
+
+function notationToPhysical(n, side) {
+  if (side !== "left") return n;
+  return FLIP[n] || n;
+}
+
+function physicalToDirs(p) {
+  const dirs = [];
+  if (p === 1 || p === 4 || p === 7) dirs.push("left");
+  if (p === 3 || p === 6 || p === 9) dirs.push("right");
+  if (p === 1 || p === 2 || p === 3) dirs.push("down");
+  if (p === 7 || p === 8 || p === 9) dirs.push("up");
+  return dirs;
+}
+
+function createAttempt(cmd) {
+  return {
+    cmdId: cmd.id,
+    phase: "wait",
+    progress: 0,
+    startFrame: -1,
+    anchorFrame: -1,
+    result: null,
+    reason: "",
+    framesTaken: 0,
+    charge: 0,
+    released: false,
+    lastIdx: -1,
+    sign: 0,
+    traveled: 0,
+    cardinals: 0,
+    moveFrame: -1,
+  };
+}
+
+function finishAttempt(attempt, result, reason, frame) {
+  attempt.phase = "done";
+  attempt.result = result;
+  attempt.reason = reason || "";
+  attempt.framesTaken = attempt.startFrame < 0 ? 0 : frame - attempt.startFrame + 1;
+  return result;
+}
+
+function stepMotion(attempt, cmd, dir, frame, leniency) {
+  const seq = cmd.seq;
+  if (attempt.phase === "wait") {
+    if (dir === 5) return null;
+    if (dir !== seq[0]) return finishAttempt(attempt, "fail", "違う方向", frame);
+    attempt.phase = "run";
+    attempt.progress = 1;
+    attempt.startFrame = frame;
+    attempt.anchorFrame = frame;
+    if (attempt.progress === seq.length) return finishAttempt(attempt, "success", "", frame);
+    return null;
+  }
+  const prev = seq[attempt.progress - 1];
+  const next = seq[attempt.progress];
+  if (dir === prev) {
+    attempt.anchorFrame = frame;
+    return null;
+  }
+  const gap = frame - attempt.anchorFrame;
+  if (dir === next) {
+    if (gap > leniency) return finishAttempt(attempt, "fail", "遅すぎ", frame);
+    attempt.progress += 1;
+    attempt.anchorFrame = frame;
+    if (attempt.progress === seq.length) return finishAttempt(attempt, "success", "", frame);
+    return null;
+  }
+  if (dir === 5) {
+    if (gap > leniency) return finishAttempt(attempt, "fail", "遅すぎ", frame);
+    return null;
+  }
+  return finishAttempt(attempt, "fail", "違う方向", frame);
+}
+
+function stepDouble(attempt, cmd, dir, frame, leniency) {
+  const tap = cmd.seq[0];
+  if (attempt.phase === "wait") {
+    if (dir === 5) return null;
+    if (dir !== tap) return finishAttempt(attempt, "fail", "違う方向", frame);
+    attempt.phase = "run";
+    attempt.startFrame = frame;
+    attempt.anchorFrame = frame;
+    attempt.released = false;
+    return null;
+  }
+  if (frame - attempt.startFrame > leniency) return finishAttempt(attempt, "fail", "遅すぎ", frame);
+  if (!attempt.released) {
+    if (dir === tap) return null;
+    if (dir !== 5) return finishAttempt(attempt, "fail", "違う方向", frame);
+    attempt.released = true;
+    return null;
+  }
+  if (dir === tap) return finishAttempt(attempt, "success", "", frame);
+  if (dir === 5) return null;
+  return finishAttempt(attempt, "fail", "違う方向", frame);
+}
+
+function stepCharge(attempt, cmd, dir, frame, options) {
+  const charging = cmd.chargeDirs.includes(dir);
+  const releasing = cmd.releaseDirs.includes(dir);
+  if (attempt.phase === "wait") {
+    if (dir === 5) return null;
+    if (!charging) return finishAttempt(attempt, "fail", "違う方向", frame);
+    attempt.phase = "run";
+    attempt.startFrame = frame;
+    attempt.anchorFrame = frame;
+    attempt.charge = 1;
+    return null;
+  }
+  if (charging) {
+    attempt.charge += 1;
+    attempt.anchorFrame = frame;
+    return null;
+  }
+  if (attempt.charge < options.charge) {
+    return finishAttempt(attempt, "fail", `溜め不足（${attempt.charge}/${options.charge}F）`, frame);
+  }
+  const gap = frame - attempt.anchorFrame;
+  if (releasing) {
+    if (gap > options.leniency) return finishAttempt(attempt, "fail", "遅すぎ", frame);
+    return finishAttempt(attempt, "success", "", frame);
+  }
+  if (dir === 5) {
+    if (gap > options.leniency) return finishAttempt(attempt, "fail", "遅すぎ", frame);
+    return null;
+  }
+  return finishAttempt(attempt, "fail", "違う方向", frame);
+}
+
+function stepCircle(attempt, dir, frame, options) {
+  const leniency = options.leniency;
+  const limit = Math.max(36, leniency * 4);
+  if (dir === 5) {
+    if (attempt.phase === "wait") return null;
+    if (frame - attempt.anchorFrame > leniency) return finishAttempt(attempt, "fail", "途切れ", frame);
+    return null;
+  }
+  const idx = RING.indexOf(dir);
+  if (attempt.phase === "wait") {
+    attempt.phase = "run";
+    attempt.startFrame = frame;
+    attempt.anchorFrame = frame;
+    attempt.lastIdx = idx;
+    attempt.sign = 0;
+    attempt.traveled = 0;
+    attempt.cardinals = CARDINAL_BIT[dir] || 0;
+    attempt.moveFrame = -1;
+    return null;
+  }
+  const cw = (idx - attempt.lastIdx + 8) % 8;
+  if (cw === 0) {
+    attempt.anchorFrame = frame;
+    if (attempt.moveFrame >= 0 && frame - attempt.moveFrame > limit) {
+      return finishAttempt(attempt, "fail", "遅すぎ", frame);
+    }
+    return null;
+  }
+  const ccw = (8 - cw) % 8;
+  let step;
+  let sign;
+  if (cw < ccw) {
+    step = cw;
+    sign = 1;
+  } else if (ccw < cw) {
+    step = ccw;
+    sign = -1;
+  } else {
+    return finishAttempt(attempt, "fail", "違う方向", frame);
+  }
+  if (step > 2) return finishAttempt(attempt, "fail", "違う方向", frame);
+  if (attempt.sign === 0) attempt.sign = sign;
+  else if (sign !== attempt.sign) return finishAttempt(attempt, "fail", "逆回転", frame);
+  if (attempt.moveFrame < 0) attempt.moveFrame = frame;
+  if (frame - attempt.moveFrame > limit) return finishAttempt(attempt, "fail", "遅すぎ", frame);
+  attempt.traveled += step;
+  attempt.lastIdx = idx;
+  attempt.anchorFrame = frame;
+  if (CARDINAL_BIT[dir]) attempt.cardinals |= CARDINAL_BIT[dir];
+  if (attempt.cardinals === 15 && attempt.traveled >= 6) return finishAttempt(attempt, "success", "", frame);
+  return null;
+}
+
+function stepAttempt(attempt, dir, frame, options) {
+  if (!attempt || attempt.phase === "done") return null;
+  const cmd = COMMAND_BY_ID[attempt.cmdId];
+  if (cmd.kind === "motion") return stepMotion(attempt, cmd, dir, frame, options.leniency);
+  if (cmd.kind === "double") return stepDouble(attempt, cmd, dir, frame, options.leniency);
+  if (cmd.kind === "charge") return stepCharge(attempt, cmd, dir, frame, options);
+  if (cmd.kind === "circle") return stepCircle(attempt, dir, frame, options);
+  return null;
+}
+
+function keyLabel(code) {
+  if (!code) return "—";
+  if (code === "Space") return "Space";
+  if (code.startsWith("Key")) return code.slice(3);
+  if (code.startsWith("Digit")) return code.slice(5);
+  const arrows = { ArrowLeft: "←", ArrowRight: "→", ArrowUp: "↑", ArrowDown: "↓" };
+  if (arrows[code]) return arrows[code];
+  return code;
+}
+
+function padButtonLabel(index) {
+  if (index == null) return "追加";
+  return PAD_BUTTON_NAMES[index] || `B${index}`;
+}
+
+const keyDown = new Set();
+const pointerHeld = { left: false, down: false, right: false, up: false };
+const pointers = new Map();
+const stamps = { left: 0, down: 0, right: 0, up: 0 };
+const combinedHeld = { left: false, down: false, right: false, up: false };
+let pressSerial = 0;
+let capture = null;
+let fakePads = null;
+let latestPads = [];
+let padWas = new Map();
+
+let frame = 0;
+let notation = 5;
+let physical = 5;
+let holds = { left: false, down: false, right: false, up: false };
+let mode = "live";
+let cooldown = 0;
+let lastRandomId = "";
+let currentCmd = COMMAND_BY_ID[settings.command] || COMMANDS[0];
+let pendingCmd = currentCmd;
+let attempt = createAttempt(currentCmd);
+let lastResult = null;
+let history = [];
+let open = null;
+let seenInput = false;
+let paused = false;
+let lastNow = performance.now();
+let acc = 0;
+const buttonRects = { left: null, down: null, right: null, up: null };
+const stats = { ok: 0, total: 0, streak: 0, best: 0, sumFrames: 0 };
+const byCmd = {};
+
+function emptyHolds() {
+  return { left: false, down: false, right: false, up: false };
+}
+
+function listPads() {
+  if (fakePads) return fakePads;
+  const list = typeof navigator.getGamepads === "function" ? navigator.getGamepads() : [];
+  return Array.from(list || []).filter(Boolean);
+}
+
+function applyPad(pad, into) {
+  const buttons = pad.buttons || [];
+  if (settings.useDpad) {
+    if (buttons[14]?.pressed) into.left = true;
+    if (buttons[15]?.pressed) into.right = true;
+    if (buttons[13]?.pressed) into.down = true;
+    if (buttons[12]?.pressed) into.up = true;
+  }
+  if (settings.useStick && pad.axes && pad.axes.length >= 2) {
+    const x = pad.axes[0] || 0;
+    const y = pad.axes[1] || 0;
+    const dead = 0.55;
+    if (x <= -dead) into.left = true;
+    if (x >= dead) into.right = true;
+    if (y >= dead) into.down = true;
+    if (y <= -dead) into.up = true;
+  }
+  for (const dir of DIRS) {
+    const index = settings.padButtons[dir];
+    if (index == null) continue;
+    if (buttons[index]?.pressed) into[dir] = true;
+  }
+}
+
+function readHolds() {
+  const next = emptyHolds();
+  for (const dir of DIRS) {
+    const code = settings.keys[dir];
+    if (code && keyDown.has(code)) next[dir] = true;
+    if (pointerHeld[dir]) next[dir] = true;
+  }
+  latestPads = listPads();
+  if (capture?.type !== "pad") {
+    for (const pad of latestPads) applyPad(pad, next);
+  }
+  return next;
+}
+
+function engage(dir) {
+  if (!dir) return;
+  if (!combinedHeld[dir] && !stamps[dir]) stamps[dir] = ++pressSerial;
+}
+
+function updateEngagement(nextHolds) {
+  for (const dir of DIRS) {
+    if (nextHolds[dir] && !combinedHeld[dir] && !stamps[dir]) stamps[dir] = ++pressSerial;
+    if (!nextHolds[dir]) stamps[dir] = 0;
+    combinedHeld[dir] = nextHolds[dir];
+  }
+}
+
+function pickCommand() {
+  if (settings.command !== "random") return COMMAND_BY_ID[settings.command];
+  let pool = COMMANDS.filter((cmd) => cmd.id !== lastRandomId);
+  if (!pool.length) pool = COMMANDS;
+  const cmd = pool[Math.floor(Math.random() * pool.length)];
+  lastRandomId = cmd.id;
+  return cmd;
+}
+
+function currentResolved() {
+  holds = readHolds();
+  return resolveFromHolds(holds, stamps, settings.socdH, settings.socdV, settings.side);
+}
+
+function startLive(cmd) {
+  currentCmd = cmd;
+  pendingCmd = cmd;
+  attempt = createAttempt(cmd);
+  lastResult = null;
+  mode = "live";
+}
+
+function armOrStart(cmd) {
+  pendingCmd = cmd;
+  const resolved = currentResolved();
+  if (resolved.notation === 5) startLive(cmd);
+  else {
+    currentCmd = cmd;
+    attempt = createAttempt(cmd);
+    lastResult = null;
+    mode = "arm";
+  }
+}
+
+function pushHistory(dir, phys, frames) {
+  if (frames <= 0) return;
+  if (dir === 5 && !seenInput) return;
+  history.push({ dir, phys, frames });
+  if (history.length > 40) history.shift();
+}
+
+function noteDirection(dir, phys) {
+  if (!open) {
+    open = { dir, phys, frames: 1 };
+    if (dir !== 5) seenInput = true;
+    return;
+  }
+  if (open.dir === dir) {
+    open.frames += 1;
+    if (dir !== 5) seenInput = true;
+    return;
+  }
+  pushHistory(open.dir, open.phys, open.frames);
+  if (dir !== 5) seenInput = true;
+  open = { dir, phys, frames: 1 };
+}
+
+function expectedNotation() {
+  if (!currentCmd || attempt.result || mode !== "live") return null;
+  if (currentCmd.kind === "motion") {
+    if (attempt.progress >= currentCmd.seq.length) return null;
+    return currentCmd.seq[attempt.progress];
+  }
+  if (currentCmd.kind === "double") return currentCmd.seq[0];
+  if (currentCmd.kind === "charge") {
+    return attempt.charge >= settings.charge ? currentCmd.release : currentCmd.hold;
+  }
+  return null;
+}
+
+function recordResult(result) {
+  stats.total += 1;
+  const row = byCmd[currentCmd.id] || (byCmd[currentCmd.id] = { ok: 0, total: 0 });
+  row.total += 1;
+  if (result === "success") {
+    stats.ok += 1;
+    stats.streak += 1;
+    stats.best = Math.max(stats.best, stats.streak);
+    stats.sumFrames += attempt.framesTaken;
+    row.ok += 1;
+  } else {
+    stats.streak = 0;
+  }
+  const time = attempt.framesTaken ? `${attempt.framesTaken}F` : "";
+  const text = result === "success"
+    ? `成功 ${currentCmd.notation} ${time}。${stats.streak}連続。`
+    : `失敗 ${currentCmd.notation}。${attempt.reason}`;
+  document.getElementById("announce").textContent = text;
+  lastResult = {
+    ok: result === "success",
+    reason: attempt.reason,
+    frames: attempt.framesTaken,
+    charge: attempt.charge,
+    streak: stats.streak,
+    kind: currentCmd.kind,
+  };
+  mode = "cooldown";
+  cooldown = 72;
+  pendingCmd = pickCommand();
+  renderStats();
+  try { navigator.vibrate?.(result === "success" ? 12 : 28); } catch (e) { /* 未対応でも続行 */ }
+}
+
+function pollPadCapture() {
+  if (capture?.type !== "pad") return;
+  for (const pad of latestPads) {
+    const buttons = pad.buttons || [];
+    const prev = padWas.get(pad.index) || [];
+    for (let i = 0; i < buttons.length; i += 1) {
+      const pressed = !!buttons[i]?.pressed;
+      if (pressed && !prev[i]) {
+        assignPad(capture.dir, i);
+        capture = null;
+        padWas.set(pad.index, buttons.map((button) => !!button?.pressed));
+        renderBinds();
+        return;
+      }
+    }
+  }
+}
+
+function rememberPadButtons() {
+  for (const pad of latestPads) {
+    padWas.set(pad.index, (pad.buttons || []).map((button) => !!button?.pressed));
+  }
+}
+
+function tick() {
+  frame += 1;
+  holds = readHolds();
+  pollPadCapture();
+  if (capture?.type === "pad") {
+    holds = readHolds();
+  }
+  updateEngagement(holds);
+  const resolved = resolveFromHolds(holds, stamps, settings.socdH, settings.socdV, settings.side);
+  notation = resolved.notation;
+  physical = resolved.physical;
+  noteDirection(notation, physical);
+  rememberPadButtons();
+  renderPadLive();
+  renderPadStatus();
+
+  if (mode === "cooldown") {
+    cooldown -= 1;
+    if (cooldown <= 0) {
+      if (notation === 5) startLive(pendingCmd);
+      else mode = "arm";
+    }
+    return;
+  }
+  if (mode === "arm") {
+    if (notation === 5) startLive(pendingCmd);
+    return;
+  }
+  const result = stepAttempt(attempt, notation, frame, settings);
+  if (result) recordResult(result);
+}
+
+function rateText(ok, total) {
+  if (!total) return "—";
+  return `${Math.round((ok / total) * 100)}%`;
+}
+
+function renderStats() {
+  const avg = stats.ok ? `${Math.round(stats.sumFrames / stats.ok)}F` : "—";
+  document.getElementById("stats").innerHTML =
+    `<div><span>成功</span> ${stats.ok} / ${stats.total}</div>` +
+    `<div><span>成功率</span> ${rateText(stats.ok, stats.total)}</div>` +
+    `<div><span>連続</span> ${stats.streak}（最高 ${stats.best}）</div>` +
+    `<div><span>成功時の平均</span> ${avg}</div>`;
+  const rows = COMMANDS.map((cmd) => {
+    const row = byCmd[cmd.id] || { ok: 0, total: 0 };
+    return `<tr><td>${cmd.notation} ${cmd.name}</td><td>${row.ok}</td><td>${row.total}</td><td>${rateText(row.ok, row.total)}</td></tr>`;
+  });
+  document.getElementById("by-cmd").innerHTML = rows.join("");
+}
+
+function renderBinds() {
+  for (const button of document.querySelectorAll("#key-binds button")) {
+    const dir = button.dataset.key;
+    const waiting = capture?.type === "key" && capture.dir === dir;
+    button.classList.toggle("wait", waiting);
+    button.innerHTML = `${DIR_LABEL[dir]} <kbd>${waiting ? "…" : keyLabel(settings.keys[dir])}</kbd>`;
+  }
+  for (const button of document.querySelectorAll("#pad-binds button")) {
+    const dir = button.dataset.pad;
+    const waiting = capture?.type === "pad" && capture.dir === dir;
+    button.classList.toggle("wait", waiting);
+    button.innerHTML = `${DIR_LABEL[dir]} <kbd>${waiting ? "…" : padButtonLabel(settings.padButtons[dir])}</kbd>`;
+  }
+  for (const button of document.querySelectorAll("#side button")) {
+    button.classList.toggle("on", button.dataset.side === settings.side);
+  }
+  document.getElementById("len-val").textContent = `${settings.leniency}F`;
+  document.getElementById("charge-val").textContent = `${settings.charge}F`;
+  document.getElementById("leniency").value = String(settings.leniency);
+  document.getElementById("charge").value = String(settings.charge);
+  document.getElementById("socd-h").value = settings.socdH;
+  document.getElementById("socd-v").value = settings.socdV;
+  document.getElementById("guide").checked = settings.guide;
+  document.getElementById("use-dpad").checked = settings.useDpad;
+  document.getElementById("use-stick").checked = settings.useStick;
+  document.getElementById("command").value = settings.command;
+}
+
+let padStatusText = "";
+function renderPadStatus() {
+  const pads = listPads();
+  const text = pads.length
+    ? pads.map((pad) => pad.id || "ゲームパッド").join(" / ")
+    : "未接続。ボタンを押すと認識します。";
+  if (text === padStatusText) return;
+  padStatusText = text;
+  document.getElementById("pad-status").textContent = text;
+}
+
+let padLiveText = "";
+function renderPadLive() {
+  const names = [];
+  for (const pad of latestPads) {
+    (pad.buttons || []).forEach((button, index) => {
+      if (button?.pressed) names.push(padButtonLabel(index));
+    });
+  }
+  const text = names.length ? `押しているボタン: ${names.join(" ")}` : "";
+  if (text === padLiveText) return;
+  padLiveText = text;
+  document.getElementById("pad-live").textContent = text;
+}
+
+function assignKey(dir, code) {
+  if (!code || code === "Escape" || code === "Tab") return;
+  const previous = settings.keys[dir];
+  for (const other of DIRS) {
+    if (other !== dir && settings.keys[other] === code) settings.keys[other] = previous;
+  }
+  settings.keys[dir] = code;
+  saveSettings();
+}
+
+function assignPad(dir, index) {
+  for (const other of DIRS) {
+    if (other !== dir && settings.padButtons[other] === index) settings.padButtons[other] = null;
+  }
+  settings.padButtons[dir] = index;
+  saveSettings();
+}
+
+function onKeyDown(event) {
+  if (event.repeat) return;
+  if (capture?.type === "key") {
+    event.preventDefault();
+    if (event.code !== "Escape") assignKey(capture.dir, event.code);
+    capture = null;
+    renderBinds();
+    return;
+  }
+  const dir = DIRS.find((name) => settings.keys[name] === event.code);
+  if (!dir) return;
+  event.preventDefault();
+  const active = document.activeElement;
+  if (active && active !== document.body && typeof active.blur === "function") active.blur();
+  if (!keyDown.has(event.code)) {
+    keyDown.add(event.code);
+    engage(dir);
+  }
+}
+
+function onKeyUp(event) {
+  if (keyDown.has(event.code)) event.preventDefault();
+  keyDown.delete(event.code);
+}
+
+function clearTransientHolds() {
+  keyDown.clear();
+  pointers.clear();
+  for (const dir of DIRS) pointerHeld[dir] = false;
+}
+
+function dirAtPoint(x, y) {
+  for (const dir of DIRS) {
+    const rect = buttonRects[dir];
+    if (!rect) continue;
+    if (x >= rect.x && x < rect.x + rect.w && y >= rect.y && y < rect.y + rect.h) return dir;
+  }
+  return null;
+}
+
+function pointOf(event) {
+  const rect = canvas.getBoundingClientRect();
+  return { x: event.clientX - rect.left, y: event.clientY - rect.top };
+}
+
+function refreshPointers() {
+  const next = emptyHolds();
+  for (const dir of pointers.values()) if (dir) next[dir] = true;
+  for (const dir of DIRS) {
+    if (next[dir] && !pointerHeld[dir]) engage(dir);
+    pointerHeld[dir] = next[dir];
+  }
+}
+
+function onPointerDown(event) {
+  const point = pointOf(event);
+  const dir = dirAtPoint(point.x, point.y);
+  if (!dir) return;
+  event.preventDefault();
+  try { canvas.setPointerCapture(event.pointerId); } catch (e) { /* ポインタIDが未活性でも入力は受ける */ }
+  pointers.set(event.pointerId, dir);
+  refreshPointers();
+}
+
+function onPointerMove(event) {
+  if (!pointers.has(event.pointerId)) return;
+  const point = pointOf(event);
+  pointers.set(event.pointerId, dirAtPoint(point.x, point.y));
+  refreshPointers();
+}
+
+function onPointerUp(event) {
+  if (!pointers.has(event.pointerId)) return;
+  pointers.delete(event.pointerId);
+  refreshPointers();
+}
+
+function roundRect(x, y, w, h, r) {
+  const radius = Math.max(0, Math.min(r, w / 2, h / 2));
+  ctx.beginPath();
+  ctx.moveTo(x + radius, y);
+  ctx.arcTo(x + w, y, x + w, y + h, radius);
+  ctx.arcTo(x + w, y + h, x, y + h, radius);
+  ctx.arcTo(x, y + h, x, y, radius);
+  ctx.arcTo(x, y, x + w, y, radius);
+  ctx.closePath();
+}
+
+function fillText(value, x, y, size, color, align, weight) {
+  ctx.fillStyle = color || C.text;
+  ctx.font = `${weight || 700} ${size}px ${FONT}`;
+  ctx.textAlign = align || "left";
+  ctx.textBaseline = "middle";
+  ctx.fillText(value, x, y);
+}
+
+function recipeSteps() {
+  const cmd = currentCmd;
+  const side = settings.side;
+  const failed = attempt.result === "fail";
+  const success = attempt.result === "success";
+  if (cmd.kind === "motion" || cmd.kind === "double") {
+    return cmd.seq.map((num, index) => {
+      let state = "todo";
+      if (cmd.kind === "motion") {
+        if (success || index < attempt.progress) state = "done";
+        else if (index === attempt.progress) state = failed ? "bad" : "now";
+      } else if (success) {
+        state = "done";
+      } else if (attempt.phase === "wait") {
+        state = index === 0 ? "now" : "todo";
+      } else if (!attempt.released) {
+        state = index === 0 ? "now" : "todo";
+      } else {
+        state = index === 0 ? "done" : (failed ? "bad" : "now");
+      }
+      const phys = notationToPhysical(num, side);
+      return { label: `${num} ${ARROW[phys]}`, state };
+    });
+  }
+  if (cmd.kind === "charge") {
+    const charged = success || attempt.charge >= settings.charge;
+    const holdPhys = notationToPhysical(cmd.hold, side);
+    const releasePhys = notationToPhysical(cmd.release, side);
+    return [
+      { label: `${cmd.hold} ${ARROW[holdPhys]}`, state: charged ? "done" : (failed ? "bad" : "now") },
+      { label: `${cmd.release} ${ARROW[releasePhys]}`, state: success ? "done" : (charged ? "now" : "todo") },
+    ];
+  }
+  const order = attempt.sign < 0 ? [4, 2, 6, 8] : [6, 2, 4, 8];
+  return order.map((num) => {
+    const bit = CARDINAL_BIT[num];
+    const hit = (attempt.cardinals & bit) !== 0;
+    const phys = notationToPhysical(num, side);
+    return { label: `${num} ${ARROW[phys]}`, state: hit ? "done" : "todo" };
+  });
+}
+
+function layoutOf(w, h) {
+  const s = clamp(Math.min(w / 920, h / 680), 0.72, 1.2);
+  const margin = 22;
+  const cardY = 58;
+  const cardH = Math.max(148, 176 * s);
+  const historyH = Math.max(104, 120 * s);
+  const historyY = h - historyH - 16;
+  const midY = cardY + cardH + 14;
+  const midH = Math.max(120, historyY - midY - 8);
+  return { w, h, s, margin, cardY, cardH, midY, midH, historyY, historyH };
+}
+
+function drawBackground(w, h) {
+  const grad = ctx.createLinearGradient(0, 0, 0, h);
+  grad.addColorStop(0, "#1a2130");
+  grad.addColorStop(1, "#10141c");
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, w, h);
+  ctx.strokeStyle = "rgba(140, 188, 255, 0.05)";
+  ctx.lineWidth = 1;
+  const gap = 48;
+  ctx.beginPath();
+  for (let x = (w * 0.5) % gap; x < w; x += gap) {
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x, h);
+  }
+  for (let y = 80; y < h; y += gap) {
+    ctx.moveTo(0, y);
+    ctx.lineTo(w, y);
+  }
+  ctx.stroke();
+}
+
+function drawTarget(box) {
+  const { margin, cardY, cardH, w, s } = box;
+  roundRect(margin, cardY, w - margin * 2, cardH, 18);
+  ctx.fillStyle = C.card;
+  ctx.fill();
+  const cmd = currentCmd;
+  const left = margin + 22;
+  let cursor = cardY + 28 * s;
+  fillText(settings.command === "random" ? "ランダム" : "指定", left, cursor, Math.round(12 * s), C.dim, "left", 700);
+  fillText(settings.side === "left" ? "左向き" : "右向き", w - margin - 22, cursor, Math.round(13 * s), C.blueSoft, "right", 800);
+  cursor += 28 * s;
+  fillText(cmd.notation, left, cursor, Math.round(40 * s), C.text, "left", 800);
+  const notationWidth = ctx.measureText(cmd.notation).width;
+  fillText(cmd.name, left + notationWidth + 14, cursor + 4, Math.round(18 * s), C.muted, "left", 700);
+  cursor += 34 * s;
+  const steps = recipeSteps();
+  let chipX = left;
+  const chipH = Math.max(26, 30 * s);
+  const chipBottomLimit = cardY + cardH - (cmd.kind === "charge" ? 36 * s : 16);
+  for (const step of steps) {
+    ctx.font = `800 ${Math.round(14 * s)}px ${FONT}`;
+    const chipW = ctx.measureText(step.label).width + 22;
+    if (chipX + chipW > w - margin - 20) {
+      chipX = left;
+      cursor += chipH + 6;
+    }
+    if (cursor + chipH / 2 > chipBottomLimit) break;
+    roundRect(chipX, cursor - chipH / 2, chipW, chipH, 10);
+    if (step.state === "done") ctx.fillStyle = "rgba(61,255,138,0.18)";
+    else if (step.state === "now") ctx.fillStyle = "rgba(255,209,90,0.18)";
+    else if (step.state === "bad") ctx.fillStyle = "rgba(255,90,78,0.2)";
+    else ctx.fillStyle = "rgba(255,255,255,0.04)";
+    ctx.fill();
+    const color = step.state === "done" ? C.green : step.state === "now" ? C.gold : step.state === "bad" ? C.red : C.dim;
+    fillText(step.label, chipX + 11, cursor, Math.round(14 * s), color, "left", 800);
+    chipX += chipW + 8;
+  }
+  if (cmd.kind === "charge") {
+    const barY = cardY + cardH - 22 * s;
+    const barX = left;
+    const barW = Math.min(280 * s, w - margin * 2 - 44);
+    roundRect(barX, barY, barW, 8, 4);
+    ctx.fillStyle = "rgba(255,255,255,0.08)";
+    ctx.fill();
+    const ratio = clamp(attempt.charge / settings.charge, 0, 1);
+    if (ratio > 0) {
+      roundRect(barX, barY, Math.max(8, barW * ratio), 8, 4);
+      ctx.fillStyle = ratio >= 1 ? C.green : C.gold;
+      ctx.fill();
+    }
+    fillText(`${attempt.charge}/${settings.charge}F`, barX + barW + 10, barY + 4, Math.round(12 * s), C.muted, "left", 700);
+  } else if (mode === "live" && attempt.phase === "run" && attempt.startFrame >= 0) {
+    const elapsed = frame - attempt.startFrame + 1;
+    fillText(`${elapsed}F`, w - margin - 22, cardY + cardH - 24 * s, Math.round(14 * s), C.muted, "right", 800);
+  }
+}
+
+function drawNumpad(x, y, cell, gap) {
+  const nums = [
+    [7, 8, 9],
+    [4, 5, 6],
+    [1, 2, 3],
+  ];
+  const expect = settings.guide ? expectedNotation() : null;
+  for (let row = 0; row < 3; row += 1) {
+    for (let col = 0; col < 3; col += 1) {
+      const num = nums[row][col];
+      const px = x + col * (cell + gap);
+      const py = y + row * (cell + gap);
+      roundRect(px, py, cell, cell, 12);
+      const active = notation === num;
+      if (active && num !== 5) ctx.fillStyle = C.blue;
+      else if (active) ctx.fillStyle = "#343c52";
+      else ctx.fillStyle = "#1a2030";
+      ctx.fill();
+      if (expect === num && !active) {
+        ctx.strokeStyle = C.gold;
+        ctx.lineWidth = 3;
+        ctx.stroke();
+      } else if (active) {
+        ctx.strokeStyle = "rgba(255,255,255,0.18)";
+        ctx.lineWidth = 2;
+        ctx.stroke();
+      }
+      fillText(String(num), px + cell / 2, py + cell / 2 + 1, Math.round(cell * 0.42), active ? "#fff" : C.muted, "center", 800);
+    }
+  }
+}
+
+function drawHitbox(x, y, bw, bh, gap, s) {
+  const spots = [
+    { dir: "up", col: 0, row: 0 },
+    { dir: "left", col: 0, row: 1 },
+    { dir: "down", col: 1, row: 1 },
+    { dir: "right", col: 2, row: 1 },
+  ];
+  const expect = settings.guide && mode === "live" ? expectedNotation() : null;
+  const guide = new Set(expect ? physicalToDirs(notationToPhysical(expect, settings.side)) : []);
+  for (const spot of spots) {
+    const px = x + spot.col * (bw + gap);
+    const py = y + spot.row * (bh + gap);
+    const down = !!holds[spot.dir];
+    buttonRects[spot.dir] = { x: px, y: py, w: bw, h: bh };
+    roundRect(px, py + (down ? 3 : 0), bw, bh - (down ? 3 : 0), 16);
+    ctx.fillStyle = down ? C.blue : "#2a3146";
+    ctx.fill();
+    if (guide.has(spot.dir) && !down) {
+      ctx.strokeStyle = C.gold;
+      ctx.lineWidth = 3;
+      ctx.stroke();
+    }
+    fillText(DIR_LABEL[spot.dir], px + bw / 2, py + bh * 0.4 + (down ? 3 : 0), Math.round(18 * s), "#fff", "center", 800);
+    fillText(keyLabel(settings.keys[spot.dir]), px + bw / 2, py + bh * 0.72 + (down ? 2 : 0), Math.round(11 * s), down ? "#d7e6ff" : C.dim, "center", 700);
+  }
+}
+
+function drawReadout(x, y, s) {
+  fillText("解決", x, y, Math.round(12 * s), C.dim, "left", 700);
+  const color = notation === 5 ? C.dim : C.text;
+  fillText(String(notation), x, y + 48 * s, Math.round(72 * s), color, "left", 800);
+  fillText(ARROW[physical], x + 78 * s, y + 46 * s, Math.round(42 * s), notation === 5 ? C.dim : C.gold, "left", 700);
+  fillText(REL_NAME[notation], x, y + 96 * s, Math.round(16 * s), C.muted, "left", 700);
+}
+
+function drawHistory(box) {
+  const { margin, historyY, historyH, w, s } = box;
+  roundRect(margin, historyY, w - margin * 2, historyH, 18);
+  ctx.fillStyle = "rgba(28, 34, 48, 0.92)";
+  ctx.fill();
+  fillText("入力履歴", margin + 18, historyY + 18 * s, Math.round(12 * s), C.dim, "left", 700);
+  fillText("数字は継続フレーム", w - margin - 18, historyY + 18 * s, Math.round(12 * s), C.dim, "right", 700);
+  const items = history.slice(-18);
+  if (open) items.push({ ...open, live: true });
+  const baseY = historyY + historyH * 0.62;
+  let cursor = w - margin - 18;
+  const gap = 8;
+  const digitSize = Math.round(12 * s);
+  for (let i = items.length - 1; i >= 0; i -= 1) {
+    const item = items[i];
+    const neutral = item.dir === 5;
+    const arrow = ARROW[item.phys] || ARROW[item.dir];
+    const main = neutral ? "5" : `${item.dir}${arrow}`;
+    const framesLabel = item.frames >= 999 ? "999+" : String(item.frames);
+    ctx.font = `800 ${Math.round(neutral ? 13 * s : 15 * s)}px ${FONT}`;
+    const mainW = ctx.measureText(main).width;
+    ctx.font = `700 ${digitSize}px ${FONT}`;
+    const frameW = ctx.measureText(framesLabel).width;
+    const wide = Math.max(44, Math.max(mainW, frameW) + 18);
+    cursor -= wide;
+    if (cursor < margin + 16) break;
+    roundRect(cursor, baseY - 28 * s, wide - 4, 56 * s, 10);
+    ctx.fillStyle = item.live ? "rgba(61,116,224,0.28)" : neutral ? "rgba(255,255,255,0.03)" : "rgba(255,255,255,0.05)";
+    ctx.fill();
+    fillText(main, cursor + (wide - 4) / 2, baseY - 8 * s, Math.round(neutral ? 13 * s : 15 * s), neutral ? C.dim : C.text, "center", 800);
+    fillText(framesLabel, cursor + (wide - 4) / 2, baseY + 14 * s, digitSize, C.gold, "center", 700);
+    cursor -= gap;
+  }
+}
+
+function drawBanner(box, contentBottom) {
+  if (!lastResult || mode === "live") {
+    if (mode === "arm") {
+      const y = Math.min(box.historyY - 16, Math.max(contentBottom + 28, box.midY + box.midH - 18));
+      fillText("方向を離すと次の問題", box.w / 2, y, 14, C.gold, "center", 800);
+    }
+    return;
+  }
+  const releaseHint = notation !== 5 && (mode === "arm" || mode === "cooldown");
+  const bw = Math.min(420, box.w - 64);
+  const bh = lastResult.ok && releaseHint ? 128 : 108;
+  const x = (box.w - bw) / 2;
+  let y = contentBottom + 18;
+  const maxY = box.historyY - bh - 10;
+  if (y > maxY) y = Math.max(box.midY + 4, maxY);
+  roundRect(x, y, bw, bh, 18);
+  ctx.fillStyle = lastResult.ok ? "rgba(18, 48, 34, 0.94)" : "rgba(58, 24, 24, 0.94)";
+  ctx.fill();
+  ctx.strokeStyle = lastResult.ok ? C.green : C.red;
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  fillText(lastResult.ok ? "成功" : "失敗", box.w / 2, y + 26, 26, lastResult.ok ? C.green : C.red, "center", 800);
+  if (lastResult.ok) {
+    const sec = (lastResult.frames / 60).toFixed(2);
+    const extra = lastResult.kind === "charge" ? `  溜め ${lastResult.charge}F` : "";
+    fillText(`${lastResult.frames}F（${sec}秒）${extra}`, box.w / 2, y + 58, 16, C.text, "center", 700);
+    fillText(`${lastResult.streak}連続`, box.w / 2, y + 82, 14, C.gold, "center", 800);
+    if (releaseHint) fillText("方向を離すと次の問題", box.w / 2, y + 106, 13, C.muted, "center", 700);
+  } else {
+    fillText(lastResult.reason || "失敗", box.w / 2, y + 62, 18, C.text, "center", 800);
+    if (releaseHint || mode === "arm") fillText("方向を離すと次の問題", box.w / 2, y + 90, 13, C.muted, "center", 700);
+  }
+}
+
+function drawStats(box) {
+  const { w, s } = box;
+  const rate = rateText(stats.ok, stats.total);
+  fillText(`成功率 ${rate}`, w - 22, 28, Math.round(15 * s), C.text, "right", 800);
+  fillText(`${stats.ok}/${stats.total}  連続 ${stats.streak}  最高 ${stats.best}`, w - 22, 48, Math.round(12 * s), C.dim, "right", 700);
+  fillText("テンキーはキャラ向き", 22, 28, Math.round(13 * s), C.dim, "left", 700);
+}
+
+function render() {
+  const rect = canvas.getBoundingClientRect();
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  const cssW = Math.max(320, rect.width || 960);
+  const cssH = Math.max(320, rect.height || 640);
+  const bw = Math.round(cssW * dpr);
+  const bh = Math.round(cssH * dpr);
+  if (canvas.width !== bw || canvas.height !== bh) {
+    canvas.width = bw;
+    canvas.height = bh;
+  }
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const box = layoutOf(cssW, cssH);
+  for (const dir of DIRS) buttonRects[dir] = null;
+  drawBackground(cssW, cssH);
+  drawStats(box);
+  drawTarget(box);
+  const avail = cssW - box.margin * 2;
+  let cell = clamp(74 * box.s, 40, 84);
+  let bwBtn = clamp(66 * box.s, 54, 86);
+  const gap = 8;
+  const measure = () => {
+    const grid = cell * 3 + gap * 2;
+    const hitW = bwBtn * 3 + gap * 2;
+    const readW = 148 * box.s;
+    return { grid, hitW, hitH: bwBtn * 2 + gap, readW, cluster: grid + readW + hitW + 56 };
+  };
+  let parts = measure();
+  while (parts.cluster > avail && cell > 38) {
+    cell -= 4;
+    bwBtn = Math.max(52, bwBtn - 3);
+    parts = measure();
+  }
+  const stacked = parts.cluster > avail;
+  const gridX = stacked
+    ? box.margin
+    : box.margin + Math.max(0, (avail - parts.cluster) / 2);
+  const gridY = box.midY + 8;
+  drawNumpad(gridX, gridY, cell, gap);
+  const readX = gridX + parts.grid + 24;
+  drawReadout(readX, gridY + 4, box.s);
+  const hitX = stacked
+    ? box.margin + Math.max(0, (avail - parts.hitW) / 2)
+    : readX + parts.readW + 8;
+  const hitY = stacked ? gridY + parts.grid + 16 : gridY + Math.max(0, (parts.grid - parts.hitH) / 2);
+  drawHitbox(hitX, hitY, bwBtn, bwBtn, gap, box.s);
+  const contentBottom = Math.max(gridY + parts.grid, hitY + parts.hitH);
+  drawHistory(box);
+  drawBanner(box, contentBottom);
+}
+
+function loop(now) {
+  if (document.hidden) {
+    lastNow = now;
+    acc = 0;
+  } else if (!paused) {
+    let dt = now - lastNow;
+    lastNow = now;
+    if (dt < 0) dt = 0;
+    if (dt > 250) dt = 250;
+    acc += dt;
+    if (acc > FRAME_MS * 8) acc = FRAME_MS * 8;
+    while (acc >= FRAME_MS) {
+      acc -= FRAME_MS;
+      tick();
+    }
+  } else {
+    lastNow = now;
+  }
+  render();
+  requestAnimationFrame(loop);
+}
+
+function bindControls() {
+  const command = document.getElementById("command");
+  const random = document.createElement("option");
+  random.value = "random";
+  random.textContent = "ランダム";
+  command.appendChild(random);
+  for (const cmd of COMMANDS) {
+    const option = document.createElement("option");
+    option.value = cmd.id;
+    option.textContent = commandLabel(cmd);
+    command.appendChild(option);
+  }
+  command.value = settings.command;
+  command.addEventListener("change", () => {
+    settings.command = command.value;
+    saveSettings();
+    armOrStart(pickCommand());
+  });
+
+  document.getElementById("side").addEventListener("click", (event) => {
+    const button = event.target.closest("button");
+    if (!button) return;
+    settings.side = button.dataset.side;
+    saveSettings();
+    renderBinds();
+    armOrStart(currentCmd);
+  });
+
+  document.getElementById("leniency").addEventListener("input", (event) => {
+    settings.leniency = clamp(Number(event.target.value), 4, 36);
+    document.getElementById("len-val").textContent = `${settings.leniency}F`;
+    saveSettings();
+  });
+  document.getElementById("charge").addEventListener("input", (event) => {
+    settings.charge = clamp(Number(event.target.value), 20, 60);
+    document.getElementById("charge-val").textContent = `${settings.charge}F`;
+    saveSettings();
+  });
+  document.getElementById("socd-h").addEventListener("change", (event) => {
+    settings.socdH = event.target.value;
+    saveSettings();
+  });
+  document.getElementById("socd-v").addEventListener("change", (event) => {
+    settings.socdV = event.target.value;
+    saveSettings();
+  });
+  document.getElementById("guide").addEventListener("change", (event) => {
+    settings.guide = event.target.checked;
+    saveSettings();
+  });
+  document.getElementById("use-dpad").addEventListener("change", (event) => {
+    settings.useDpad = event.target.checked;
+    saveSettings();
+  });
+  document.getElementById("use-stick").addEventListener("change", (event) => {
+    settings.useStick = event.target.checked;
+    saveSettings();
+  });
+
+  const keyBinds = document.getElementById("key-binds");
+  const padBinds = document.getElementById("pad-binds");
+  for (const dir of DIRS) {
+    const keyButton = document.createElement("button");
+    keyButton.type = "button";
+    keyButton.dataset.key = dir;
+    keyButton.addEventListener("click", () => {
+      capture = { type: "key", dir };
+      renderBinds();
+    });
+    keyBinds.appendChild(keyButton);
+    const padButton = document.createElement("button");
+    padButton.type = "button";
+    padButton.dataset.pad = dir;
+    padButton.addEventListener("click", () => {
+      capture = { type: "pad", dir };
+      renderBinds();
+    });
+    padBinds.appendChild(padButton);
+  }
+  document.getElementById("reset-keys").addEventListener("click", () => {
+    settings.keys = { ...DEFAULT_KEYS };
+    capture = null;
+    saveSettings();
+    renderBinds();
+  });
+  document.getElementById("clear-pad").addEventListener("click", () => {
+    settings.padButtons = { left: null, down: null, right: null, up: null };
+    capture = null;
+    saveSettings();
+    renderBinds();
+  });
+  document.getElementById("skip").addEventListener("click", () => {
+    armOrStart(pickCommand());
+    renderStats();
+  });
+  document.getElementById("reset-stats").addEventListener("click", () => {
+    stats.ok = 0;
+    stats.total = 0;
+    stats.streak = 0;
+    stats.best = 0;
+    stats.sumFrames = 0;
+    for (const id of Object.keys(byCmd)) delete byCmd[id];
+    renderStats();
+  });
+  renderBinds();
+  renderStats();
+}
+
+window.addEventListener("keydown", onKeyDown);
+window.addEventListener("keyup", onKeyUp);
+window.addEventListener("blur", clearTransientHolds);
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) clearTransientHolds();
+});
+window.addEventListener("gamepadconnected", renderPadStatus);
+window.addEventListener("gamepaddisconnected", renderPadStatus);
+canvas.addEventListener("pointerdown", onPointerDown);
+canvas.addEventListener("pointermove", onPointerMove);
+window.addEventListener("pointerup", onPointerUp);
+window.addEventListener("pointercancel", onPointerUp);
+canvas.addEventListener("contextmenu", (event) => event.preventDefault());
+window.addEventListener("resize", render);
+
+if (settings.command === "random") currentCmd = pickCommand();
+else currentCmd = COMMAND_BY_ID[settings.command] || COMMANDS[0];
+pendingCmd = currentCmd;
+attempt = createAttempt(currentCmd);
+
+bindControls();
+renderPadStatus();
+requestAnimationFrame(loop);
+
+window.__trainer = {
+  COMMANDS,
+  createAttempt,
+  stepAttempt,
+  resolveFromHolds,
+  notationToPhysical,
+  tick,
+  render,
+  pause(value) { paused = value; },
+  keyDown(code) { onKeyDown({ code, repeat: false, preventDefault() {} }); },
+  keyUp(code) { onKeyUp({ code, preventDefault() {} }); },
+  setFakePads(pads) { fakePads = pads; },
+  settings,
+  state() {
+    return {
+      frame,
+      notation,
+      physical,
+      holds: { ...holds },
+      stamps: { ...stamps },
+      mode,
+      attempt: { ...attempt, cmdId: attempt.cmdId, result: attempt.result, reason: attempt.reason, progress: attempt.progress, charge: attempt.charge, framesTaken: attempt.framesTaken },
+      stats: { ...stats },
+      history: history.slice(),
+      open: open ? { ...open } : null,
+      lastResult: lastResult ? { ...lastResult } : null,
+      command: currentCmd.id,
+      side: settings.side,
+      rects: { ...buttonRects },
+    };
+  },
+};
+</script>
+</body>
+</html>

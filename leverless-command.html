@@ -325,8 +325,8 @@
       <p class="hint">初期値はレバーレスと同じです。左右同時はニュートラル、上下同時は上。溜め縦は下を押したまま上を足せます。</p>
 
       <label class="check"><input id="guide" type="checkbox" checked> 次の入力をガイドする</label>
-      <label class="check"><input id="require-attack" type="checkbox" checked> 最後に攻撃ボタン（P）が必要</label>
-      <p class="hint">オンのとき、方向が完成してから許容フレーム以内に P を押すと成功です。波動拳なら 236P です。</p>
+      <label class="check"><input id="require-attack" type="checkbox" checked> 最後に攻撃ボタン（A）が必要</label>
+      <p class="hint">オンのとき、方向が完成してから許容フレーム以内に A を押すと成功です。波動拳なら 236A です。</p>
 
       <h2>キーボード</h2>
       <div class="bind-grid" id="key-binds"></div>
@@ -340,7 +340,7 @@
       <label class="check"><input id="use-stick" type="checkbox" checked> 左スティックを使う</label>
       <div class="bind-grid" id="pad-binds"></div>
       <button type="button" id="clear-pad">パッド割当をクリア</button>
-      <p class="hint">方向パッドと左スティックに加え、押したボタンを直接割り当てられます。攻撃の初期ボタンは A です。</p>
+      <p class="hint">方向パッドと左スティックに加え、押したボタンを直接割り当てられます。攻撃の初期割り当ては、ゲームパッドの下ボタンです。</p>
 
       <h2>成績</h2>
       <p id="announce" class="sr" aria-live="polite"></p>
@@ -356,7 +356,7 @@
         <button type="button" id="skip">次の問題</button>
         <button type="button" id="reset-stats">成績をリセット</button>
       </div>
-      <p class="version">版 5</p>
+      <p class="version">版 6</p>
     </aside>
   </div>
 <script>
@@ -367,10 +367,10 @@
 // コマンドの数字はキャラの向き基準。左向きのときは左右だけを反転する。
 const FRAME_MS = 1000 / 60;
 const STORAGE_KEY = "leverless-command-settings-v1";
-const APP_VERSION = "5";
+const APP_VERSION = "6";
 const DIRS = ["left", "down", "right", "up"];
 const INPUTS = ["left", "down", "right", "up", "punch"];
-const DIR_LABEL = { left: "左", down: "下", right: "右", up: "上", punch: "P" };
+const DIR_LABEL = { left: "左", down: "下", right: "右", up: "上", punch: "攻撃" };
 const DEFAULT_KEYS = { left: "KeyA", down: "KeyS", right: "KeyD", up: "Space", punch: "KeyJ" };
 const ARROW = {
   1: "↙", 2: "↓", 3: "↘",
@@ -720,6 +720,12 @@ function stepAttempt(attempt, dir, frame, options) {
   return null;
 }
 
+function showKeyHints(phone) {
+  if (phone) return false;
+  if (navigator.maxTouchPoints > 0) return false;
+  return !window.matchMedia("(pointer: coarse)").matches;
+}
+
 function keyLabel(code) {
   if (!code) return "—";
   if (code === "Space") return "Space";
@@ -1028,7 +1034,7 @@ function recordResult(result) {
     stats.streak = 0;
   }
   const time = attempt.framesTaken ? `${attempt.framesTaken}F` : "";
-  const shown = `${currentCmd.notation}${attempt.withPunch ? "P" : ""}`;
+  const shown = `${currentCmd.notation}${attempt.withPunch ? "A" : ""}`;
   const text = result === "success"
     ? `成功 ${shown} ${time}。${stats.streak}連続。`
     : `失敗 ${shown}。${attempt.reason}`;
@@ -1375,7 +1381,7 @@ function withPunchStep(steps) {
   if (attempt.result === "success") state = "done";
   else if (attempt.phase === "punch") state = "now";
   else if (attempt.result === "fail" && attempt.reason === "ボタンが遅い") state = "bad";
-  steps.push({ label: "P", state });
+  steps.push({ label: "A", state });
   return steps;
 }
 
@@ -1461,7 +1467,7 @@ function drawTarget(box) {
     fillText("判定なし", left, cursor, Math.round(14 * s), C.muted, "left", 700);
     if (recognized && frame <= recognized.until) {
       cursor += 28 * s;
-      const punchMark = recognized.withPunch ? "P" : "";
+      const punchMark = recognized.withPunch ? "A" : "";
       const found = recognized.name
         ? `${recognized.notation}${punchMark} ${recognized.name}`
         : `${recognized.notation}${punchMark}`;
@@ -1556,10 +1562,15 @@ function drawHitbox(box) {
       ctx.fillStyle = "rgba(255,255,255,0.16)";
       ctx.fill();
     }
-    const main = spot.attack ? "P" : DIR_LABEL[spot.dir];
-    const sub = spot.attack ? "パンチ" : keyLabel(settings.keys[spot.dir]);
-    fillText(main, cx, cy - radius * 0.16, Math.round(Math.max(16, diameter * 0.3)), "#fff", "center", 800);
-    fillText(sub, cx, cy + radius * 0.32, Math.round(Math.max(10, diameter * 0.15)), pressed ? "#ffe4e0" : "rgba(255,255,255,0.78)", "center", 700);
+    const main = spot.attack ? "A" : DIR_LABEL[spot.dir];
+    const sub = spot.attack ? "攻撃" : (showKeyHints(box.phone) ? keyLabel(settings.keys[spot.dir]) : "");
+    const mainSize = Math.round(Math.max(16, diameter * (spot.attack ? 0.34 : 0.3)));
+    if (sub) {
+      fillText(main, cx, cy - radius * 0.16, mainSize, "#fff", "center", 800);
+      fillText(sub, cx, cy + radius * 0.32, Math.round(Math.max(10, diameter * 0.16)), pressed ? "#ffe4e0" : "rgba(255,255,255,0.78)", "center", 700);
+    } else {
+      fillText(main, cx, cy, mainSize, "#fff", "center", 800);
+    }
   }
 }
 
@@ -1611,7 +1622,7 @@ function drawHistory(box) {
       ctx.arc(cursor + 16, cy, 16, 0, Math.PI * 2);
       ctx.fillStyle = C.attack;
       ctx.fill();
-      fillText("P", cursor + 16, cy, 14, "#fff", "center", 800);
+      fillText("A", cursor + 16, cy, 14, "#fff", "center", 800);
       cursor -= gap;
       continue;
     }

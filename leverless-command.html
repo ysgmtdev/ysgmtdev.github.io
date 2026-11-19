@@ -49,6 +49,9 @@
     touch-action: none;
     background: #141822;
   }
+  #settings-backdrop {
+    display: none;
+  }
   #settings-open, #settings-close {
     display: none;
     border: 0;
@@ -66,22 +69,37 @@
   }
   aside {
     box-sizing: border-box;
-    overflow: auto;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    height: 100%;
     max-height: 100%;
-    padding: 22px 18px 32px;
+    max-height: 100dvh;
+    overflow: hidden;
     background: #1c2230;
     border-left: 1px solid rgba(255, 255, 255, 0.06);
-    touch-action: pan-y;
-    -webkit-overflow-scrolling: touch;
   }
   .aside-tools {
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 12px;
+    flex: 0 0 auto;
+    padding: 14px 16px 12px;
+    background: #1c2230;
+  }
+  .aside-scroll {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+    touch-action: pan-y;
+    padding: 4px 18px 28px;
   }
   .back {
-    margin: 0 0 10px;
+    margin: 0;
     font-size: 13px;
     font-weight: 700;
   }
@@ -238,27 +256,59 @@
     clip: rect(0, 0, 0, 0);
     border: 0;
   }
-  @media (max-width: 800px) {
+  @media (max-width: 800px), (max-height: 520px) {
     #app { grid-template-columns: 1fr; }
     #settings-open { display: block; }
-    #settings-close { display: inline-flex; align-items: center; height: 36px; padding: 0 12px; }
-    aside {
+    #settings-close {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 88px;
+      height: 48px;
+      padding: 0 16px;
+      font-size: 16px;
+    }
+    #settings-backdrop.open {
+      display: block;
       position: fixed;
       inset: 0;
+      z-index: 5;
+      background: rgba(8, 10, 16, 0.5);
+    }
+    aside {
+      position: fixed;
       z-index: 6;
-      width: auto;
+      top: 0;
+      right: 0;
+      bottom: 0;
+      left: auto;
+      width: min(440px, 100%);
+      height: 100%;
+      height: 100dvh;
       max-height: 100dvh;
       border-left: 0;
-      transform: translateX(100%);
+      transform: translateX(110%);
       visibility: hidden;
       pointer-events: none;
-      padding-top: max(18px, env(safe-area-inset-top));
-      padding-bottom: max(28px, env(safe-area-inset-bottom));
+      padding-top: env(safe-area-inset-top);
+      padding-bottom: env(safe-area-inset-bottom);
+      padding-right: env(safe-area-inset-right);
     }
     aside.open {
       transform: none;
       visibility: visible;
       pointer-events: auto;
+    }
+    .aside-tools {
+      position: sticky;
+      top: 0;
+      z-index: 2;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    }
+  }
+  @media (max-height: 520px) and (orientation: landscape) {
+    aside {
+      width: min(440px, calc(100% - 64px));
     }
   }
   @media (prefers-reduced-motion: reduce) {
@@ -272,11 +322,13 @@
       <canvas id="view" width="390" height="844" aria-hidden="true"></canvas>
       <button type="button" id="settings-open">設定</button>
     </div>
+    <div id="settings-backdrop"></div>
     <aside id="settings">
       <div class="aside-tools">
         <p class="back"><a href="index.html">一覧へ</a></p>
         <button type="button" id="settings-close">閉じる</button>
       </div>
+      <div class="aside-scroll">
       <h1>コマンド練習</h1>
       <p class="lead">レバーレス（ヒットボックス）の方向入力です。判定は60fpsで、60Fが1秒です。</p>
 
@@ -356,7 +408,8 @@
         <button type="button" id="skip">次の問題</button>
         <button type="button" id="reset-stats">成績をリセット</button>
       </div>
-      <p class="version">版 6</p>
+      <p class="version">版 7</p>
+      </div>
     </aside>
   </div>
 <script>
@@ -367,7 +420,7 @@
 // コマンドの数字はキャラの向き基準。左向きのときは左右だけを反転する。
 const FRAME_MS = 1000 / 60;
 const STORAGE_KEY = "leverless-command-settings-v1";
-const APP_VERSION = "6";
+const APP_VERSION = "7";
 const DIRS = ["left", "down", "right", "up"];
 const INPUTS = ["left", "down", "right", "up", "punch"];
 const DIR_LABEL = { left: "左", down: "下", right: "右", up: "上", punch: "攻撃" };
@@ -1226,6 +1279,16 @@ function assignPad(dir, index) {
   saveSettings();
 }
 
+function closeSettings() {
+  document.getElementById("settings").classList.remove("open");
+  document.getElementById("settings-backdrop").classList.remove("open");
+}
+
+function openSettings() {
+  document.getElementById("settings").classList.add("open");
+  document.getElementById("settings-backdrop").classList.add("open");
+}
+
 function onKeyDown(event) {
   if (event.repeat) return;
   if (capture?.type === "key") {
@@ -1233,6 +1296,11 @@ function onKeyDown(event) {
     if (event.code !== "Escape") assignKey(capture.dir, event.code);
     capture = null;
     renderBinds();
+    return;
+  }
+  if (event.code === "Escape" && document.getElementById("settings").classList.contains("open")) {
+    event.preventDefault();
+    closeSettings();
     return;
   }
   const dir = INPUTS.find((name) => settings.keys[name] === event.code);
@@ -1859,12 +1927,11 @@ function bindControls() {
   });
   renderBinds();
   renderStats();
-  const settingsPanel = document.getElementById("settings");
-  document.getElementById("settings-open").addEventListener("click", () => {
-    settingsPanel.classList.add("open");
-  });
-  document.getElementById("settings-close").addEventListener("click", () => {
-    settingsPanel.classList.remove("open");
+  document.getElementById("settings-open").addEventListener("click", openSettings);
+  document.getElementById("settings-close").addEventListener("click", closeSettings);
+  document.getElementById("settings-backdrop").addEventListener("pointerup", (event) => {
+    event.preventDefault();
+    closeSettings();
   });
 }
 
@@ -1891,6 +1958,7 @@ function touchOnSettings(target) {
 document.addEventListener("touchstart", (event) => {
   const target = event.target;
   if (touchOnSettings(target)) return;
+  if (target.id === "settings-backdrop") return;
   if (target.closest && target.closest("button, a, input, select, label, summary")) return;
   event.preventDefault();
 }, { passive: false });
